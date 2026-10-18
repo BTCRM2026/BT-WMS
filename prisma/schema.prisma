@@ -1,0 +1,704 @@
+// BT Warehouse WMS schema.
+//
+// Tenancy: every business table carries company_id + warehouse_id. Child rows
+// reference parents through COMPOSITE foreign keys (id, company_id), so the
+// database itself rejects a row that points at another company's data.
+// Extra SQL (stock_balance view, CHECK constraints, append-only trigger,
+// negative-stock guard) lives in prisma/migrations/*/migration.sql.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["views"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  WAREHOUSE_MANAGER
+  STORE_KEEPER
+  BILLING
+  VIEWER
+}
+
+enum LocationType {
+  STORAGE
+  RECEIVING
+  DISPATCH
+  DAMAGED
+  QUARANTINE
+  RETURN
+}
+
+enum MovementType {
+  INWARD
+  OUTWARD
+  TRANSFER_OUT
+  TRANSFER_IN
+  ADJUSTMENT
+  DAMAGE
+  RETURN
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum DocumentStatus {
+  DRAFT
+  POSTED
+  CANCELLED
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  PICKING
+  PACKED
+  DISPATCHED
+  CANCELLED
+}
+
+enum PickListStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum StockAuditStatus {
+  OPEN
+  COUNTING
+  CLOSED
+}
+
+// ---------------------------------------------------------------------------
+// Platform tables
+// ---------------------------------------------------------------------------
+
+model Company {
+  id         String   @id @default(cuid())
+  name       String
+  slug       String   @unique
+  code       String   @unique // short prefix used in tile codes, e.g. BT / RF
+  brandColor String   @default("#1d4ed8") @map("brand_color")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  users          User[]
+  products       Product[]
+  batches        Batch[]
+  locations      Location[]
+  movements      StockMovement[]
+  purchaseOrders PurchaseOrder[]
+  inwardReceipts InwardReceipt[]
+  salesOrders    SalesOrder[]
+  pickLists      PickList[]
+  dispatches     Dispatch[]
+  returns        StockReturn[]
+  damages        Damage[]
+  stockAudits    StockAudit[]
+  adjustments    Adjustment[]
+  auditLogs      AuditLog[]
+  sessions       Session[]
+
+  @@map("companies")
+}
+
+model Warehouse {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  address   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  products       Product[]
+  batches        Batch[]
+  locations      Location[]
+  movements      StockMovement[]
+  purchaseOrders PurchaseOrder[]
+  inwardReceipts InwardReceipt[]
+  salesOrders    SalesOrder[]
+  pickLists      PickList[]
+  dispatches     Dispatch[]
+  returns        StockReturn[]
+  damages        Damage[]
+  stockAudits    StockAudit[]
+  adjustments    Adjustment[]
+
+  @@map("warehouses")
+}
+
+model User {
+  id                String    @id @default(cuid())
+  companyId         String    @map("company_id")
+  email             String    @unique
+  name              String
+  passwordHash      String    @map("password_hash")
+  role              Role
+  isActive          Boolean   @default(true) @map("is_active")
+  failedLoginCount  Int       @default(0) @map("failed_login_count")
+  lockedUntil       DateTime? @map("locked_until")
+  passwordChangedAt DateTime  @default(now()) @map("password_changed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  company   Company         @relation(fields: [companyId], references: [id])
+  sessions  Session[]
+  movements StockMovement[]
+  auditLogs AuditLog[]
+
+  @@index([companyId])
+  @@map("users")
+}
+
+/// Mirror of the permission map in src/server/auth/permissions.ts (the code map
+/// is authoritative; the seed keeps this table in sync for reporting/SQL use).
+model RolePermission {
+  role       Role
+  permission String
+
+  @@id([role, permission])
+  @@map("role_permissions")
+}
+
+model Session {
+  id              String   @id @default(cuid())
+  tokenHash       String   @unique @map("token_hash")
+  userId          String   @map("user_id")
+  activeCompanyId String   @map("active_company_id")
+  ip              String?
+  userAgent       String?  @map("user_agent")
+  expiresAt       DateTime @map("expires_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeCompany Company @relation(fields: [activeCompanyId], references: [id])
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String
+  success   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ip, createdAt])
+  @@index([email, createdAt])
+  @@map("login_attempts")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  companyId String?  @map("company_id")
+  userId    String?  @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  before    Json?
+  after     Json?
+  ip        String?
+  userAgent String?  @map("user_agent")
+  requestId String?  @map("request_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  company Company? @relation(fields: [companyId], references: [id])
+  user    User?    @relation(fields: [userId], references: [id])
+
+  @@index([companyId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Master data
+// ---------------------------------------------------------------------------
+
+model Product {
+  id                String   @id @default(cuid())
+  companyId         String   @map("company_id")
+  warehouseId       String   @map("warehouse_id")
+  sku               String
+  name              String
+  unit              String   @default("PCS")
+  packSize          Int      @default(1) @map("pack_size")
+  barcode           String?
+  minStock          Int      @default(0) @map("min_stock")
+  maxStock          Int?     @map("max_stock")
+  expiryTracked     Boolean  @default(false) @map("expiry_tracked")
+  defaultLocationId String?  @map("default_location_id")
+  mrp               Decimal  @default(0) @db.Decimal(12, 2)
+  purchasePrice     Decimal  @default(0) @map("purchase_price") @db.Decimal(12, 2)
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  company         Company   @relation(fields: [companyId], references: [id])
+  warehouse       Warehouse @relation(fields: [warehouseId], references: [id])
+  defaultLocation Location? @relation(fields: [defaultLocationId, companyId], references: [id, companyId])
+
+  batches             Batch[]
+  movements           StockMovement[]
+  purchaseOrderLines  PurchaseOrderLine[]
+  inwardReceiptLines  InwardReceiptLine[]
+  salesOrderLines     SalesOrderLine[]
+  pickListLines       PickListLine[]
+  dispatchLines       DispatchLine[]
+  returns             StockReturn[]
+  damages             Damage[]
+  stockAuditLines     StockAuditLine[]
+  adjustments         Adjustment[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, sku])
+  @@unique([companyId, barcode])
+  @@index([companyId, name])
+  @@map("products")
+}
+
+model Batch {
+  id          String    @id @default(cuid())
+  companyId   String    @map("company_id")
+  warehouseId String    @map("warehouse_id")
+  productId   String    @map("product_id")
+  batchNo     String    @map("batch_no")
+  mfgDate     DateTime? @map("mfg_date") @db.Date
+  expiryDate  DateTime? @map("expiry_date") @db.Date
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product   Product   @relation(fields: [productId, companyId], references: [id, companyId])
+
+  movements          StockMovement[]
+  inwardReceiptLines InwardReceiptLine[]
+  pickListLines      PickListLine[]
+  dispatchLines      DispatchLine[]
+  returns            StockReturn[]
+  damages            Damage[]
+  stockAuditLines    StockAuditLine[]
+  adjustments        Adjustment[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, productId, batchNo])
+  @@index([companyId, expiryDate])
+  @@map("batches")
+}
+
+/// A numbered floor tile. Code format: <COMPANY CODE>-<ZONE>-<ROW 2 digits>-<COLUMN>, e.g. BT-A-03-1.
+model Location {
+  id          String       @id @default(cuid())
+  companyId   String       @map("company_id")
+  warehouseId String       @map("warehouse_id")
+  code        String
+  zone        String
+  row         Int
+  column      Int
+  level       Int          @default(0)
+  type        LocationType @default(STORAGE)
+  capacity    Int?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  defaultForProducts Product[]
+  movements          StockMovement[]
+  inwardReceiptLines InwardReceiptLine[]
+  pickListLines      PickListLine[]
+  returns            StockReturn[]
+  damages            Damage[]
+  stockAuditLines    StockAuditLine[]
+  adjustments        Adjustment[]
+
+  @@unique([id, companyId])
+  @@unique([warehouseId, code])
+  @@index([companyId, zone])
+  @@map("locations")
+}
+
+// ---------------------------------------------------------------------------
+// Stock ledger (append-only) and derived balance
+// ---------------------------------------------------------------------------
+
+/// Append-only. UPDATE/DELETE are blocked by a database trigger; fix mistakes
+/// with a reversing row (reversal_of_id). quantity is always > 0, direction is +1/-1.
+model StockMovement {
+  id            String       @id @default(cuid())
+  companyId     String       @map("company_id")
+  warehouseId   String       @map("warehouse_id")
+  productId     String       @map("product_id")
+  batchId       String?      @map("batch_id")
+  locationId    String       @map("location_id")
+  type          MovementType
+  direction     Int
+  quantity      Int
+  referenceType String?      @map("reference_type")
+  referenceId   String?      @map("reference_id")
+  userId        String       @map("user_id")
+  reason        String?
+  reversalOfId  String?      @unique @map("reversal_of_id")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  company    Company        @relation(fields: [companyId], references: [id])
+  warehouse  Warehouse      @relation(fields: [warehouseId], references: [id])
+  product    Product        @relation(fields: [productId, companyId], references: [id, companyId])
+  batch      Batch?         @relation(fields: [batchId, companyId], references: [id, companyId])
+  location   Location       @relation(fields: [locationId, companyId], references: [id, companyId])
+  user       User           @relation(fields: [userId], references: [id])
+  reversalOf StockMovement? @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversedBy StockMovement? @relation("Reversal")
+
+  @@index([companyId, productId, locationId, batchId])
+  @@index([companyId, createdAt])
+  @@index([companyId, locationId])
+  @@index([referenceType, referenceId])
+  @@map("stock_movements")
+}
+
+/// Read-only view: SUM(direction * quantity) over stock_movements.
+view StockBalance {
+  id          String  @unique
+  companyId   String  @map("company_id")
+  warehouseId String  @map("warehouse_id")
+  productId   String  @map("product_id")
+  batchId     String? @map("batch_id")
+  locationId  String  @map("location_id")
+  quantity    Int
+
+  @@map("stock_balance")
+}
+
+// ---------------------------------------------------------------------------
+// Documents
+// ---------------------------------------------------------------------------
+
+model PurchaseOrder {
+  id           String              @id @default(cuid())
+  companyId    String              @map("company_id")
+  warehouseId  String              @map("warehouse_id")
+  poNumber     String              @map("po_number")
+  supplierName String              @map("supplier_name")
+  status       PurchaseOrderStatus @default(DRAFT)
+  orderDate    DateTime            @default(now()) @map("order_date")
+  expectedDate DateTime?           @map("expected_date")
+  notes        String?
+  createdById  String              @map("created_by_id")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  company        Company             @relation(fields: [companyId], references: [id])
+  warehouse      Warehouse           @relation(fields: [warehouseId], references: [id])
+  lines          PurchaseOrderLine[]
+  inwardReceipts InwardReceipt[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, poNumber])
+  @@index([companyId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id              String  @id @default(cuid())
+  companyId       String  @map("company_id")
+  warehouseId     String  @map("warehouse_id")
+  purchaseOrderId String  @map("purchase_order_id")
+  productId       String  @map("product_id")
+  quantity        Int
+  unitPrice       Decimal @default(0) @map("unit_price") @db.Decimal(12, 2)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId, companyId], references: [id, companyId], onDelete: Cascade)
+  product       Product       @relation(fields: [productId, companyId], references: [id, companyId])
+
+  @@index([companyId, purchaseOrderId])
+  @@map("purchase_order_lines")
+}
+
+model InwardReceipt {
+  id              String         @id @default(cuid())
+  companyId       String         @map("company_id")
+  warehouseId     String         @map("warehouse_id")
+  receiptNumber   String         @map("receipt_number")
+  purchaseOrderId String?        @map("purchase_order_id")
+  status          DocumentStatus @default(DRAFT)
+  receivedAt      DateTime       @default(now()) @map("received_at")
+  receivedById    String         @map("received_by_id")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  company       Company             @relation(fields: [companyId], references: [id])
+  warehouse     Warehouse           @relation(fields: [warehouseId], references: [id])
+  purchaseOrder PurchaseOrder?      @relation(fields: [purchaseOrderId, companyId], references: [id, companyId])
+  lines         InwardReceiptLine[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, receiptNumber])
+  @@map("inward_receipts")
+}
+
+model InwardReceiptLine {
+  id              String  @id @default(cuid())
+  companyId       String  @map("company_id")
+  warehouseId     String  @map("warehouse_id")
+  inwardReceiptId String  @map("inward_receipt_id")
+  productId       String  @map("product_id")
+  batchId         String? @map("batch_id")
+  locationId      String  @map("location_id")
+  quantity        Int
+
+  inwardReceipt InwardReceipt @relation(fields: [inwardReceiptId, companyId], references: [id, companyId], onDelete: Cascade)
+  product       Product       @relation(fields: [productId, companyId], references: [id, companyId])
+  batch         Batch?        @relation(fields: [batchId, companyId], references: [id, companyId])
+  location      Location      @relation(fields: [locationId, companyId], references: [id, companyId])
+
+  @@index([companyId, inwardReceiptId])
+  @@map("inward_receipt_lines")
+}
+
+model SalesOrder {
+  id           String           @id @default(cuid())
+  companyId    String           @map("company_id")
+  warehouseId  String           @map("warehouse_id")
+  orderNumber  String           @map("order_number")
+  customerName String           @map("customer_name")
+  status       SalesOrderStatus @default(DRAFT)
+  orderDate    DateTime         @default(now()) @map("order_date")
+  createdById  String           @map("created_by_id")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  company    Company          @relation(fields: [companyId], references: [id])
+  warehouse  Warehouse        @relation(fields: [warehouseId], references: [id])
+  lines      SalesOrderLine[]
+  pickLists  PickList[]
+  dispatches Dispatch[]
+  returns    StockReturn[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, orderNumber])
+  @@index([companyId, status])
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id           String  @id @default(cuid())
+  companyId    String  @map("company_id")
+  warehouseId  String  @map("warehouse_id")
+  salesOrderId String  @map("sales_order_id")
+  productId    String  @map("product_id")
+  quantity     Int
+  unitPrice    Decimal @default(0) @map("unit_price") @db.Decimal(12, 2)
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId, companyId], references: [id, companyId], onDelete: Cascade)
+  product    Product    @relation(fields: [productId, companyId], references: [id, companyId])
+
+  @@index([companyId, salesOrderId])
+  @@map("sales_order_lines")
+}
+
+model PickList {
+  id           String         @id @default(cuid())
+  companyId    String         @map("company_id")
+  warehouseId  String         @map("warehouse_id")
+  pickNumber   String         @map("pick_number")
+  salesOrderId String         @map("sales_order_id")
+  status       PickListStatus @default(OPEN)
+  assignedToId String?        @map("assigned_to_id")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  company    Company        @relation(fields: [companyId], references: [id])
+  warehouse  Warehouse      @relation(fields: [warehouseId], references: [id])
+  salesOrder SalesOrder     @relation(fields: [salesOrderId, companyId], references: [id, companyId])
+  lines      PickListLine[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, pickNumber])
+  @@map("pick_lists")
+}
+
+model PickListLine {
+  id             String  @id @default(cuid())
+  companyId      String  @map("company_id")
+  warehouseId    String  @map("warehouse_id")
+  pickListId     String  @map("pick_list_id")
+  productId      String  @map("product_id")
+  batchId        String? @map("batch_id")
+  locationId     String  @map("location_id")
+  quantity       Int
+  pickedQuantity Int     @default(0) @map("picked_quantity")
+
+  pickList PickList @relation(fields: [pickListId, companyId], references: [id, companyId], onDelete: Cascade)
+  product  Product  @relation(fields: [productId, companyId], references: [id, companyId])
+  batch    Batch?   @relation(fields: [batchId, companyId], references: [id, companyId])
+  location Location @relation(fields: [locationId, companyId], references: [id, companyId])
+
+  @@index([companyId, pickListId])
+  @@map("pick_list_lines")
+}
+
+model Dispatch {
+  id             String         @id @default(cuid())
+  companyId      String         @map("company_id")
+  warehouseId    String         @map("warehouse_id")
+  dispatchNumber String         @map("dispatch_number")
+  salesOrderId   String         @map("sales_order_id")
+  status         DocumentStatus @default(DRAFT)
+  vehicleNo      String?        @map("vehicle_no")
+  trackingNo     String?        @map("tracking_no")
+  dispatchedAt   DateTime?      @map("dispatched_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  company    Company        @relation(fields: [companyId], references: [id])
+  warehouse  Warehouse      @relation(fields: [warehouseId], references: [id])
+  salesOrder SalesOrder     @relation(fields: [salesOrderId, companyId], references: [id, companyId])
+  lines      DispatchLine[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, dispatchNumber])
+  @@map("dispatches")
+}
+
+model DispatchLine {
+  id          String  @id @default(cuid())
+  companyId   String  @map("company_id")
+  warehouseId String  @map("warehouse_id")
+  dispatchId  String  @map("dispatch_id")
+  productId   String  @map("product_id")
+  batchId     String? @map("batch_id")
+  quantity    Int
+
+  dispatch Dispatch @relation(fields: [dispatchId, companyId], references: [id, companyId], onDelete: Cascade)
+  product  Product  @relation(fields: [productId, companyId], references: [id, companyId])
+  batch    Batch?   @relation(fields: [batchId, companyId], references: [id, companyId])
+
+  @@index([companyId, dispatchId])
+  @@map("dispatch_lines")
+}
+
+model StockReturn {
+  id           String         @id @default(cuid())
+  companyId    String         @map("company_id")
+  warehouseId  String         @map("warehouse_id")
+  returnNumber String         @map("return_number")
+  salesOrderId String?        @map("sales_order_id")
+  productId    String         @map("product_id")
+  batchId      String?        @map("batch_id")
+  locationId   String         @map("location_id")
+  quantity     Int
+  reason       String
+  status       DocumentStatus @default(DRAFT)
+  createdById  String         @map("created_by_id")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  company    Company     @relation(fields: [companyId], references: [id])
+  warehouse  Warehouse   @relation(fields: [warehouseId], references: [id])
+  salesOrder SalesOrder? @relation(fields: [salesOrderId, companyId], references: [id, companyId])
+  product    Product     @relation(fields: [productId, companyId], references: [id, companyId])
+  batch      Batch?      @relation(fields: [batchId, companyId], references: [id, companyId])
+  location   Location    @relation(fields: [locationId, companyId], references: [id, companyId])
+
+  @@unique([companyId, returnNumber])
+  @@map("returns")
+}
+
+model Damage {
+  id           String         @id @default(cuid())
+  companyId    String         @map("company_id")
+  warehouseId  String         @map("warehouse_id")
+  damageNumber String         @map("damage_number")
+  productId    String         @map("product_id")
+  batchId      String?        @map("batch_id")
+  locationId   String         @map("location_id")
+  quantity     Int
+  reason       String
+  status       DocumentStatus @default(DRAFT)
+  reportedById String         @map("reported_by_id")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product   Product   @relation(fields: [productId, companyId], references: [id, companyId])
+  batch     Batch?    @relation(fields: [batchId, companyId], references: [id, companyId])
+  location  Location  @relation(fields: [locationId, companyId], references: [id, companyId])
+
+  @@unique([companyId, damageNumber])
+  @@map("damages")
+}
+
+model StockAudit {
+  id          String           @id @default(cuid())
+  companyId   String           @map("company_id")
+  warehouseId String           @map("warehouse_id")
+  auditNumber String           @map("audit_number")
+  status      StockAuditStatus @default(OPEN)
+  startedAt   DateTime         @default(now()) @map("started_at")
+  closedAt    DateTime?        @map("closed_at")
+  createdById String           @map("created_by_id")
+
+  company     Company          @relation(fields: [companyId], references: [id])
+  warehouse   Warehouse        @relation(fields: [warehouseId], references: [id])
+  lines       StockAuditLine[]
+  adjustments Adjustment[]
+
+  @@unique([id, companyId])
+  @@unique([companyId, auditNumber])
+  @@map("stock_audits")
+}
+
+model StockAuditLine {
+  id              String  @id @default(cuid())
+  companyId       String  @map("company_id")
+  warehouseId     String  @map("warehouse_id")
+  stockAuditId    String  @map("stock_audit_id")
+  productId       String  @map("product_id")
+  batchId         String? @map("batch_id")
+  locationId      String  @map("location_id")
+  systemQuantity  Int     @map("system_quantity")
+  countedQuantity Int?    @map("counted_quantity")
+
+  stockAudit StockAudit @relation(fields: [stockAuditId, companyId], references: [id, companyId], onDelete: Cascade)
+  product    Product    @relation(fields: [productId, companyId], references: [id, companyId])
+  batch      Batch?     @relation(fields: [batchId, companyId], references: [id, companyId])
+  location   Location   @relation(fields: [locationId, companyId], references: [id, companyId])
+
+  @@index([companyId, stockAuditId])
+  @@map("stock_audit_lines")
+}
+
+model Adjustment {
+  id               String         @id @default(cuid())
+  companyId        String         @map("company_id")
+  warehouseId      String         @map("warehouse_id")
+  adjustmentNumber String         @map("adjustment_number")
+  stockAuditId     String?        @map("stock_audit_id")
+  productId        String         @map("product_id")
+  batchId          String?        @map("batch_id")
+  locationId       String         @map("location_id")
+  direction        Int
+  quantity         Int
+  reason           String
+  status           DocumentStatus @default(DRAFT)
+  createdById      String         @map("created_by_id")
+  approvedById     String?        @map("approved_by_id")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  company    Company     @relation(fields: [companyId], references: [id])
+  warehouse  Warehouse   @relation(fields: [warehouseId], references: [id])
+  stockAudit StockAudit? @relation(fields: [stockAuditId, companyId], references: [id, companyId])
+  product    Product     @relation(fields: [productId, companyId], references: [id, companyId])
+  batch      Batch?      @relation(fields: [batchId, companyId], references: [id, companyId])
+  location   Location    @relation(fields: [locationId, companyId], references: [id, companyId])
+
+  @@unique([companyId, adjustmentNumber])
+  @@map("adjustments")
+}
