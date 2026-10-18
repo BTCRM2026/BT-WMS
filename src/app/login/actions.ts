@@ -1,6 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requestMeta } from "@/server/auth/context";
@@ -8,26 +8,27 @@ import { attemptLogin } from "@/server/auth/login";
 import { cookieOptions, SESSION_COOKIE } from "@/server/auth/session";
 
 const schema = z.object({
-  email: z.email("Enter a valid email.").max(254),
-  password: z.string().min(1, "Enter your password.").max(128),
+  email: z.email("emailRequired").max(254, "emailRequired"),
+  password: z.string().min(1, "passwordRequired").max(128, "passwordRequired"),
   next: z.string().optional(),
 });
 
-const MESSAGES = {
-  invalid: "Email or password is incorrect.",
-  locked: "Too many failed attempts. Your account is locked for 15 minutes.",
-  rate_limited: "Too many attempts from this network. Please wait a few minutes.",
+export type LoginState = {
+  error?: "invalid" | "locked" | "rate_limited" | "emailRequired" | "passwordRequired";
+  email?: string;
 };
 
 // Public action (no session yet): the only one not built with action().
-export async function login(_prev: { error?: string } | undefined, form: FormData) {
+// Returns message keys; the form translates them (messages/en.json → login.errors).
+export async function login(_prev: LoginState | undefined, form: FormData): Promise<LoginState> {
   const parsed = schema.safeParse(Object.fromEntries(form));
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const email = String(form.get("email") ?? "");
+  if (!parsed.success) return { error: parsed.error.issues[0].message as LoginState["error"], email };
 
   const result = await attemptLogin({ ...parsed.data, ...(await requestMeta()) });
-  if (!result.ok) return { error: MESSAGES[result.error] };
+  if (!result.ok) return { error: result.error, email };
 
-  (await cookies()).set(SESSION_COOKIE, result.token, cookieOptions(result.expiresAt));
+  (await cookies()).set(SESSION_COOKIE, result.token, cookieOptions(result.expiresAt, (await headers()).get("host")));
   // Only same-site relative paths, never an open redirect.
   const next =
     parsed.data.next?.startsWith("/") && !parsed.data.next.startsWith("//") ? parsed.data.next : "/dashboard";

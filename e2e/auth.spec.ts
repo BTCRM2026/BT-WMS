@@ -1,13 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-
-const PASSWORD = "ChangeMe!2026";
-
-async function login(page: Page, email: string, password = PASSWORD) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign in" }).click();
-}
+import { expect, test } from "@playwright/test";
+import { login, loginOk } from "./helpers";
 
 test.describe("login lands on the right company", () => {
   for (const [email, company] of [
@@ -16,8 +8,7 @@ test.describe("login lands on the right company", () => {
     ["storekeeper@richfill.test", "Rich Fill"],
   ] as const) {
     test(`${email} -> ${company} dashboard`, async ({ page }) => {
-      await login(page, email);
-      await expect(page).toHaveURL(/\/dashboard$/);
+      await loginOk(page, email);
       await expect(page.getByTestId("dashboard-title")).toHaveText(`${company} dashboard`);
       await expect(page.getByTestId("company-name")).toHaveText(company);
       await expect(page.getByTestId("company-switcher")).toHaveCount(0); // only the owner switches
@@ -25,10 +16,12 @@ test.describe("login lands on the right company", () => {
   }
 
   test("owner can switch between companies", async ({ page }) => {
-    await login(page, "owner@btwarehouse.test");
+    await loginOk(page, "owner@btwarehouse.test");
     await expect(page.getByTestId("dashboard-title")).toHaveText("Bond Therapy dashboard");
-    await page.getByTestId("company-switcher").selectOption({ label: "Rich Fill" });
+    await page.getByTestId("company-switcher").click();
+    await page.getByTestId("switch-rich-fill").click();
     await expect(page.getByTestId("dashboard-title")).toHaveText("Rich Fill dashboard");
+    await expect(page.getByTestId("company-name")).toHaveText("Rich Fill");
   });
 });
 
@@ -50,8 +43,7 @@ test.describe("direct URL access to another role's page is blocked", () => {
     ["billing@bondtherapy.test", "/locations"],
   ] as const) {
     test(`${email} opening ${path}`, async ({ page }) => {
-      await login(page, email);
-      await expect(page).toHaveURL(/\/dashboard$/);
+      await loginOk(page, email);
       await page.goto(path);
       await expect(page).toHaveURL(/\/forbidden$/);
       await expect(page.getByTestId("forbidden")).toBeVisible();
@@ -59,20 +51,27 @@ test.describe("direct URL access to another role's page is blocked", () => {
   }
 
   test("API answers 403, not data", async ({ page }) => {
-    await login(page, "viewer@bondtherapy.test");
-    await expect(page).toHaveURL(/\/dashboard$/);
-    const res = await page.request.get("/api/users");
-    expect(res.status()).toBe(403);
+    await loginOk(page, "viewer@bondtherapy.test");
+    expect((await page.request.get("/api/users")).status()).toBe(403);
   });
 });
 
 test("sign out ends the session", async ({ page }) => {
-  await login(page, "admin@bondtherapy.test");
-  await expect(page).toHaveURL(/\/dashboard$/);
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await loginOk(page, "admin@bondtherapy.test");
+  await page.getByTestId("user-menu").click();
+  await page.getByTestId("sign-out").click();
   await expect(page).toHaveURL(/\/login/);
   await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login/);
+});
+
+test("dark mode choice is remembered", async ({ page }) => {
+  await loginOk(page, "admin@bondtherapy.test");
+  await page.getByTestId("theme-toggle").click();
+  await page.getByRole("menuitemradio", { name: "Dark" }).click();
+  await expect(page.locator("html")).toHaveClass(/dark/);
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/dark/);
 });
 
 test("health endpoint reports the database", async ({ request }) => {

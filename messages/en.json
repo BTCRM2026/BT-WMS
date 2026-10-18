@@ -1,0 +1,292 @@
+{
+  "app": {
+    "name": "BT Warehouse",
+    "tagline": "Warehouse management"
+  },
+  "common": {
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "saving": "Saving…",
+    "loading": "Loading…",
+    "search": "Search",
+    "export": "Export",
+    "exportCsv": "Export CSV (opens in Excel)",
+    "columns": "Columns",
+    "filters": "Filters",
+    "clearFilters": "Clear filters",
+    "savedViews": "Saved views",
+    "saveView": "Save current view",
+    "viewName": "View name",
+    "deleteView": "Delete view",
+    "noViews": "No saved views yet",
+    "all": "All",
+    "rowsOf": "{from}–{to} of {total}",
+    "previous": "Previous page",
+    "next": "Next page",
+    "sortBy": "Sort by {column}",
+    "units": "units",
+    "comingSoon": "This module arrives in the next release.",
+    "comingSoonHint": "The data model for it is ready. Screens are being built.",
+    "backToDashboard": "Back to dashboard",
+    "viewAll": "View all",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "scan": "Scan",
+    "floorMap": "Floor map",
+    "more": "More",
+    "groups": {
+      "masters": "Masters",
+      "inventory": "Inventory",
+      "inward": "Inward",
+      "outward": "Outward",
+      "admin": "Admin"
+    },
+    "items": {
+      "products": "Products",
+      "locations": "Locations / Tiles",
+      "stock": "Stock",
+      "stock-audits": "Stock audits",
+      "adjustments": "Adjustments",
+      "purchase-orders": "Purchase orders",
+      "inward": "Inward receipts",
+      "sales-orders": "Sales orders",
+      "picking": "Pick lists",
+      "dispatch": "Dispatch",
+      "returns": "Returns",
+      "damages": "Damages",
+      "reports": "Reports",
+      "users": "Users",
+      "audit-log": "Audit log"
+    },
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "openMenu": "Open menu",
+    "mainNav": "Main navigation",
+    "breadcrumb": "Breadcrumb",
+    "home": "Home"
+  },
+  "topbar": {
+    "searchPlaceholder": "Search products, tiles, batches, orders…",
+    "switchCompany": "Switch company",
+    "notifications": "Notifications",
+    "noNotifications": "You're all caught up",
+    "userMenu": "Account menu",
+    "changePassword": "Change password",
+    "signOut": "Sign out",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "toggleTheme": "Toggle dark mode"
+  },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "Use your company account. You'll land on your company's workspace.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "footer": "Secure sign-in · Sessions expire after 12 hours",
+    "heroTitle": "Every tile, batch and carton, accounted for.",
+    "heroBody": "One warehouse, two companies, a single source of truth for stock.",
+    "errors": {
+      "invalid": "Email or password is incorrect.",
+      "locked": "Too many failed attempts. Your account is locked for 15 minutes.",
+      "rate_limited": "Too many attempts from this network. Please wait a few minutes.",
+      "emailRequired": "Enter a valid email address.",
+      "passwordRequired": "Enter your password."
+    }
+  },
+  "dashboard": {
+    "title": "{company} dashboard",
+    "subtitle": "Live stock position, derived from every recorded movement.",
+    "kpi": {
+      "skus": "Active SKUs",
+      "units": "Units in stock",
+      "lowStock": "Below minimum",
+      "nearExpiry": "Expiring in 90 days",
+      "tiles": "Tiles in use"
+    },
+    "charts": {
+      "trend": "Inward vs outward",
+      "trendHint": "Units per day, last 30 days",
+      "inward": "Inward",
+      "outward": "Outward",
+      "byZone": "Stock by zone",
+      "byZoneHint": "Units currently on each zone's tiles",
+      "zone": "Zone {zone}",
+      "expiry": "Expiry timeline",
+      "expiryHint": "Units by expiry month, next 12 months",
+      "noData": "No data yet"
+    },
+    "alerts": {
+      "title": "Alerts",
+      "lowStock": "{name} is below minimum ({qty} / {min})",
+      "expiring": "Batch {batch} of {name} expires {date}",
+      "expired": "Batch {batch} of {name} expired {date}",
+      "none": "No alerts. Stock levels and expiry dates look healthy."
+    },
+    "quick": {
+      "title": "Quick actions",
+      "scan": "Scan a code",
+      "stock": "Check stock",
+      "map": "Open floor map",
+      "products": "Browse products"
+    }
+  },
+  "products": {
+    "title": "Products",
+    "subtitle": "Catalogue for {company}. Stock is computed from movements.",
+    "cols": {
+      "sku": "SKU",
+      "name": "Product",
+      "unit": "Unit",
+      "packSize": "Pack",
+      "barcode": "Barcode",
+      "stock": "In stock",
+      "minStock": "Min",
+      "status": "Status",
+      "mrp": "MRP",
+      "location": "Default tile"
+    },
+    "status": {
+      "ok": "In stock",
+      "low": "Low stock",
+      "out": "Out of stock"
+    },
+    "searchPlaceholder": "Search SKU, name or barcode",
+    "empty": "No products match these filters."
+  },
+  "locations": {
+    "title": "Locations / Tiles",
+    "subtitle": "Numbered floor tiles used as storage addresses.",
+    "cols": {
+      "code": "Tile",
+      "zone": "Zone",
+      "type": "Type",
+      "fill": "Fill",
+      "units": "Units",
+      "capacity": "Capacity",
+      "active": "Active"
+    },
+    "types": {
+      "STORAGE": "Storage",
+      "RECEIVING": "Receiving",
+      "DISPATCH": "Dispatch",
+      "DAMAGED": "Damaged",
+      "QUARANTINE": "Quarantine",
+      "RETURN": "Return"
+    },
+    "searchPlaceholder": "Search tile code",
+    "empty": "No tiles match these filters.",
+    "viewTable": "Table",
+    "viewMap": "Floor map"
+  },
+  "map": {
+    "title": "Warehouse floor map",
+    "subtitle": "Each square is a floor tile. Colour shows how full it is.",
+    "legend": "Fill level",
+    "empty": "Empty",
+    "low": "Under 50%",
+    "mid": "50–90%",
+    "full": "Over 90%",
+    "zone": "Zone {zone}",
+    "special": "Special areas",
+    "tileStock": "Stock on {code}",
+    "tileEmpty": "Nothing is stored on this tile.",
+    "tileSummary": "{units} units · {capacity} capacity",
+    "product": "Product",
+    "batch": "Batch",
+    "expiry": "Expiry",
+    "qty": "Qty"
+  },
+  "stock": {
+    "title": "Stock",
+    "subtitle": "Quantity per product, batch and tile, derived from the movement ledger.",
+    "cols": {
+      "sku": "SKU",
+      "product": "Product",
+      "batch": "Batch",
+      "expiry": "Expiry",
+      "tile": "Tile",
+      "qty": "Qty",
+      "status": "Status"
+    },
+    "expiry": {
+      "ok": "OK",
+      "soon": "Expires soon",
+      "expired": "Expired",
+      "none": "No expiry"
+    },
+    "searchPlaceholder": "Search product, batch or tile",
+    "empty": "No stock matches these filters."
+  },
+  "scan": {
+    "title": "Scan",
+    "subtitle": "Point the camera at a barcode, or type / use a USB scanner.",
+    "start": "Start camera",
+    "stop": "Stop camera",
+    "manual": "Code",
+    "manualPlaceholder": "Barcode, SKU, tile or batch",
+    "lookup": "Look up",
+    "notSupported": "This browser can't read barcodes from the camera. Type the code or use a USB scanner.",
+    "denied": "Camera access was blocked. Allow it in the browser settings, or type the code.",
+    "notFound": "Nothing found for \"{code}\".",
+    "found": {
+      "product": "Product",
+      "tile": "Tile",
+      "batch": "Batch"
+    },
+    "onHand": "{qty} units on hand",
+    "open": "Open",
+    "floorTasks": "Floor tasks",
+    "pick": "Pick",
+    "putaway": "Putaway",
+    "count": "Cycle count",
+    "taskSoon": "Coming next release"
+  },
+  "search": {
+    "title": "Search",
+    "resultsFor": "Results for \"{q}\"",
+    "empty": "No matches. Try a SKU, tile code like BT-A-03-1, or batch number.",
+    "hint": "Type at least 2 characters.",
+    "groups": {
+      "products": "Products",
+      "tiles": "Tiles",
+      "batches": "Batches",
+      "orders": "Orders"
+    }
+  },
+  "password": {
+    "title": "Change password",
+    "subtitle": "After changing it, other devices are signed out.",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "rules": "At least 10 characters, with upper-case, lower-case and a number.",
+    "mismatch": "New passwords do not match.",
+    "submit": "Change password",
+    "success": "Password changed. Other devices were signed out."
+  },
+  "errors": {
+    "title": "Something went wrong",
+    "body": "We couldn't load this page. Your data is safe. Try again in a moment.",
+    "dbTitle": "Reconnecting to the database",
+    "dbBody": "The server is reconnecting. This usually takes a few seconds; the page will retry on its own.",
+    "reference": "Reference: {id}",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The page you're looking for doesn't exist or was moved.",
+    "forbiddenTitle": "You don't have access to this page",
+    "forbiddenBody": "Your role doesn't include this area. Ask your administrator if you need it.",
+    "offline": "You're offline. Changes can't be saved until the connection is back.",
+    "reconnecting": "Connection to the server was lost. Reconnecting…",
+    "reconnected": "Connection restored."
+  }
+}

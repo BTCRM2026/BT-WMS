@@ -53,6 +53,14 @@ function retryable(e: unknown, operation: string): boolean {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// At most one pool reset per second, shared by all failing queries.
+let lastReset = 0;
+async function resetPool(client: PrismaClient) {
+  if (Date.now() - lastReset < 1000) return;
+  lastReset = Date.now();
+  await client.$disconnect().catch(() => {}); // the next query reconnects lazily
+}
+
 function createClient() {
   const base = new PrismaClient({
     datasourceUrl: withPoolParams(process.env.DATABASE_URL),
@@ -64,13 +72,16 @@ function createClient() {
     name: "retry",
     query: {
       async $allOperations({ operation, model, args, query }) {
-        const attempts = 4;
+        const attempts = 5;
         for (let i = 1; ; i++) {
           try {
             return await query(args);
           } catch (e) {
             if (i >= attempts || !retryable(e, operation)) throw e;
-            const delay = 200 * 2 ** (i - 1) + Math.floor(Math.random() * 100); // 200, 400, 800ms + jitter
+            // The pool may be full of sockets the server already closed (e.g. Railway restarted
+            // Postgres). Drop them so the next attempt opens fresh connections.
+            await resetPool(base);
+            const delay = 200 * 2 ** (i - 1) + Math.floor(Math.random() * 100); // 200, 400, 800, 1600ms + jitter
             logger.warn("db.retry", { model, operation, attempt: i, delay, code: (e as { code?: string }).code });
             await sleep(delay);
           }

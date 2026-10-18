@@ -1,48 +1,66 @@
+import {
+  ArrowDownToLine,
+  ArrowLeftRight,
+  BarChart3,
+  Boxes,
+  ClipboardCheck,
+  ClipboardList,
+  FileText,
+  Grid3x3,
+  History,
+  Package,
+  PackageX,
+  ShoppingCart,
+  Truck,
+  Undo2,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import type { Permission } from "@/server/auth/permissions";
 
-export type NavItem = { slug: string; label: string; permission: Permission };
-export type NavGroup = { label: string; items: NavItem[] };
+export type NavItem = { slug: string; permission: Permission; icon: LucideIcon; built?: boolean };
+export type NavGroup = { key: "masters" | "inventory" | "inward" | "outward" | "admin"; items: NavItem[] };
 
-/** Sidebar modules. Pages for these are placeholders until each module is built. */
+/** Sidebar modules. Labels live in messages/en.json under nav.items.<slug>. `built` = has a real screen. */
 export const NAV: NavGroup[] = [
   {
-    label: "Masters",
+    key: "masters",
     items: [
-      { slug: "products", label: "Products", permission: "products.view" },
-      { slug: "locations", label: "Locations / Tiles", permission: "locations.view" },
+      { slug: "products", permission: "products.view", icon: Package, built: true },
+      { slug: "locations", permission: "locations.view", icon: Grid3x3, built: true },
     ],
   },
   {
-    label: "Inventory",
+    key: "inventory",
     items: [
-      { slug: "stock", label: "Stock", permission: "stock.view" },
-      { slug: "stock-audits", label: "Stock Audits", permission: "audit.view" },
-      { slug: "adjustments", label: "Adjustments", permission: "stock.view" },
+      { slug: "stock", permission: "stock.view", icon: Boxes, built: true },
+      { slug: "stock-audits", permission: "audit.view", icon: ClipboardCheck },
+      { slug: "adjustments", permission: "stock.view", icon: ArrowLeftRight },
     ],
   },
   {
-    label: "Inward",
+    key: "inward",
     items: [
-      { slug: "purchase-orders", label: "Purchase Orders", permission: "purchase.view" },
-      { slug: "inward", label: "Inward Receipts", permission: "inward.view" },
+      { slug: "purchase-orders", permission: "purchase.view", icon: FileText },
+      { slug: "inward", permission: "inward.view", icon: ArrowDownToLine },
     ],
   },
   {
-    label: "Outward",
+    key: "outward",
     items: [
-      { slug: "sales-orders", label: "Sales Orders", permission: "sales.view" },
-      { slug: "picking", label: "Pick Lists", permission: "picking.view" },
-      { slug: "dispatch", label: "Dispatch", permission: "dispatch.view" },
-      { slug: "returns", label: "Returns", permission: "returns.view" },
-      { slug: "damages", label: "Damages", permission: "returns.view" },
+      { slug: "sales-orders", permission: "sales.view", icon: ShoppingCart },
+      { slug: "picking", permission: "picking.view", icon: ClipboardList },
+      { slug: "dispatch", permission: "dispatch.view", icon: Truck },
+      { slug: "returns", permission: "returns.view", icon: Undo2 },
+      { slug: "damages", permission: "returns.view", icon: PackageX },
     ],
   },
   {
-    label: "Admin",
+    key: "admin",
     items: [
-      { slug: "reports", label: "Reports", permission: "reports.view" },
-      { slug: "users", label: "Users", permission: "users.view" },
-      { slug: "audit-log", label: "Audit Log", permission: "auditlog.view" },
+      { slug: "reports", permission: "reports.view", icon: BarChart3 },
+      { slug: "users", permission: "users.view", icon: Users },
+      { slug: "audit-log", permission: "auditlog.view", icon: History },
     ],
   },
 ];

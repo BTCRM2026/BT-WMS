@@ -1,41 +1,69 @@
 "use client";
 
-import { useActionState } from "react";
-import { login } from "./actions";
+import { Eye, EyeOff, LogIn } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { useActionState, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/primitives";
+import { login, type LoginState } from "./actions";
 
 export function LoginForm({ next }: { next?: string }) {
-  const [state, formAction, pending] = useActionState(login, undefined);
+  const t = useTranslations("login");
+  const [state, formAction, pending] = useActionState<LoginState | undefined, FormData>(login, undefined);
+  const [show, setShow] = useState(false);
+  const fieldError =
+    state?.error === "emailRequired" ? "email" : state?.error === "passwordRequired" ? "password" : null;
+  const message = state?.error ? t(`errors.${state.error}`) : null;
+
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5" noValidate>
       <input type="hidden" name="next" value={next ?? ""} />
-      <label className="block text-sm">
-        Email
-        <input
+      <Field label={t("email")} htmlFor="email" error={fieldError === "email" ? message! : undefined}>
+        <Input
+          id="email"
           name="email"
           type="email"
+          inputMode="email"
           autoComplete="username"
+          autoFocus
           required
-          className="mt-1 w-full rounded border px-3 py-2"
+          defaultValue={state?.email}
+          aria-invalid={fieldError === "email" || undefined}
+          aria-describedby={fieldError === "email" ? "email-error" : undefined}
         />
-      </label>
-      <label className="block text-sm">
-        Password
-        <input
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          className="mt-1 w-full rounded border px-3 py-2"
-        />
-      </label>
-      {state?.error && (
-        <p role="alert" className="text-sm text-red-700">
-          {state.error}
+      </Field>
+      <Field label={t("password")} htmlFor="password" error={fieldError === "password" ? message! : undefined}>
+        <div className="relative">
+          <Input
+            id="password"
+            name="password"
+            type={show ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            className="pr-11"
+            aria-invalid={fieldError === "password" || undefined}
+            aria-describedby={fieldError === "password" ? "password-error" : undefined}
+          />
+          <button
+            type="button"
+            onClick={() => setShow((s) => !s)}
+            className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-foreground"
+            aria-label={show ? t("hidePassword") : t("showPassword")}
+            aria-pressed={show}
+          >
+            {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </div>
+      </Field>
+      {message && !fieldError && (
+        <p role="alert" className="rounded-md border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
+          {message}
         </p>
       )}
-      <button disabled={pending} className="w-full rounded bg-blue-700 px-3 py-2 text-white disabled:opacity-60">
-        {pending ? "Signing in…" : "Sign in"}
-      </button>
+      <Button type="submit" size="lg" className="w-full" loading={pending}>
+        {!pending && <LogIn />}
+        {pending ? t("submitting") : t("submit")}
+      </Button>
     </form>
   );
 }

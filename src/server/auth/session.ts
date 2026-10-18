@@ -6,10 +6,14 @@ export const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // one working day
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
-export const cookieOptions = (expires: Date) => ({
+// Secure (HTTPS-only) in production, except when the browser is on this machine over
+// plain http (local `npm start`, e2e tests): some browsers drop Secure cookies there.
+const isLoopback = (host: string | null) => !!host && /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host);
+
+export const cookieOptions = (expires: Date, host: string | null) => ({
   httpOnly: true,
   sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
+  secure: process.env.NODE_ENV === "production" && !isLoopback(host),
   path: "/",
   expires,
 });

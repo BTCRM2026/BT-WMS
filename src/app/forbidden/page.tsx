@@ -1,14 +1,23 @@
+import { ShieldX } from "lucide-react";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { buttonVariants } from "@/components/ui/button";
 
-export default function Forbidden() {
+export const metadata = { title: "No access" };
+
+export default async function Forbidden() {
+  const t = await getTranslations();
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-2 p-4 text-center">
-      <h1 className="text-2xl font-semibold" data-testid="forbidden">
-        You don&apos;t have access to this page
+    <main className="flex min-h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
+      <span className="grid size-14 place-items-center rounded-full bg-danger-soft text-danger">
+        <ShieldX className="size-7" aria-hidden />
+      </span>
+      <h1 className="text-xl font-semibold" data-testid="forbidden">
+        {t("errors.forbiddenTitle")}
       </h1>
-      <p className="text-gray-600">Ask your administrator if you need it.</p>
-      <Link href="/dashboard" className="text-blue-700">
-        Back to dashboard
+      <p className="max-w-sm text-muted">{t("errors.forbiddenBody")}</p>
+      <Link href="/dashboard" className={buttonVariants({ className: "mt-2" })}>
+        {t("common.backToDashboard")}
       </Link>
     </main>
   );

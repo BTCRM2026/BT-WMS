@@ -52,6 +52,12 @@ npm run test:integration   # real Postgres: tenant isolation, roles, lockout, le
 npm run build && npm run test:e2e   # Playwright against the production server
 ```
 
+E2E covers: login per company, wrong password, role-blocked URLs, every main screen at 360/768/1280/1920px
+plus iPhone Safari (WebKit) and Firefox (CI) / Edge (Windows), axe WCAG 2.1 AA checks (light + dark),
+and a database outage + recovery through a switchable TCP proxy (`e2e/db-proxy.mjs`).
+Lighthouse CI (`lighthouserc.cjs`) runs in GitHub Actions and requires 90+ for Performance, Accessibility
+and Best Practices. Design decisions: [docs/DESIGN.md](docs/DESIGN.md). Screenshots: `docs/screenshots/`.
+
 Integration and e2e runs each create their own fresh database (`wms_test_*`, `wms_e2e_*`);
 they never reset an existing one. CI (`.github/workflows/ci.yml`) runs lint, typecheck,
 unit, integration, build and e2e against a Postgres service on every push and PR.
