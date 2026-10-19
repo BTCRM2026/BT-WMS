@@ -292,3 +292,49 @@ export async function confirmPutaway(ctx: Context, input: z.input<typeof putaway
     return { tileCode: tile.code, quantity: line.quantity };
   });
 }
+
+// ------------------------------------------------------------------ damage photos
+
+const PHOTO_TYPES: Record<string, number[]> = {
+  "image/jpeg": [0xff, 0xd8, 0xff],
+  "image/png": [0x89, 0x50, 0x4e, 0x47],
+  "image/webp": [0x52, 0x49, 0x46, 0x46],
+};
+export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+
+/** Attach damage photos to a receipt. Type is checked by content (magic bytes), not just the name. */
+export async function attachReceiptPhotos(
+  ctx: Context,
+  receiptId: string,
+  files: { name: string; type: string; bytes: Buffer }[],
+) {
+  const receipt = await ctx.db.inwardReceipt.findUnique({ where: { id: receiptId } });
+  if (!receipt) throw new HttpError(404, "Receipt not found.");
+  if (files.length > 10) throw new HttpError(400, "At most 10 photos per receipt.");
+  for (const f of files) {
+    const magic = PHOTO_TYPES[f.type];
+    if (!magic || !magic.every((b, i) => f.bytes[i] === b))
+      throw new HttpError(415, `${f.name}: only JPG, PNG or WebP images.`);
+    if (f.bytes.length > MAX_PHOTO_BYTES) throw new HttpError(413, `${f.name} is larger than 2 MB.`);
+  }
+  await ctx.db.attachment.createMany({
+    data: files.map((f) => ({
+      companyId: ctx.company.id,
+      entity: "inward_receipt",
+      entityId: receiptId,
+      fileName: f.name.slice(0, 120),
+      mimeType: f.type,
+      size: f.bytes.length,
+      data: new Uint8Array(f.bytes),
+      uploadedById: ctx.user.id,
+    })),
+  });
+  await audit({
+    ...ctx.auditMeta,
+    action: "inward.photos",
+    entity: "inward_receipt",
+    entityId: receiptId,
+    after: { count: files.length },
+  });
+  return { count: files.length };
+}

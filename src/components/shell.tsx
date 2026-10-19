@@ -82,8 +82,11 @@ function NavLinks({
 }) {
   const t = useTranslations("nav");
   const path = usePathname();
+  // The most specific matching link wins (/inward/putaway over /inward).
+  const hrefs = ["/dashboard", "/scan", ...NAV_ITEMS.filter((i) => allowed.includes(i.slug)).map((i) => `/${i.slug}`)];
+  const activeHref = hrefs.filter((h) => isActive(path, h)).sort((a, b) => b.length - a.length)[0];
   const link = (href: string, label: string, Icon: React.ElementType) => {
-    const active = isActive(path, href);
+    const active = href === activeHref;
     return (
       <Link
         key={href}
@@ -314,7 +317,7 @@ function BottomNav({ allowed, onMore }: { allowed: string[]; onMore: () => void 
   return (
     <nav
       aria-label={t("mainNav")}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden print:hidden"
     >
       <ul className="mx-auto flex max-w-md">
         {items.map(({ href, label, Icon, primary }) => {
@@ -389,7 +392,7 @@ export function AppShell({ company, companies, user, allowed, alerts, children }
       {/* Desktop / tablet sidebar */}
       <aside
         className={cn(
-          "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line bg-surface transition-[width] duration-200 ease-[var(--ease-standard)] md:flex",
+          "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line bg-surface print:hidden transition-[width] duration-200 ease-[var(--ease-standard)] md:flex",
           collapsed ? "w-16" : "w-16 lg:w-64",
         )}
       >
@@ -419,7 +422,7 @@ export function AppShell({ company, companies, user, allowed, alerts, children }
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:px-4">
+        <header className="sticky top-0 z-30 flex h-14 print:hidden items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:px-4">
           <Sheet open={mobileNav} onOpenChange={setMobileNav}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="md:hidden" aria-label={t("nav.openMenu")}>

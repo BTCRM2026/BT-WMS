@@ -13,6 +13,16 @@ const SCREENS = [
   "/search?q=bt",
   "/settings/password",
   "/sales-orders",
+  "/sales-orders/new",
+  "/inward/new",
+  "/inward/putaway",
+  "/transfers",
+  "/returns",
+  "/damages",
+  "/stock-audits",
+  "/stock/ledger",
+  "/locations/new",
+  "/products/import",
 ];
 
 async function check(page: import("@playwright/test").Page, label: string) {

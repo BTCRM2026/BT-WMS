@@ -6,6 +6,12 @@ const alias = { "@": path.resolve(__dirname, "src") };
 export default defineConfig({
   test: {
     fileParallelism: false, // integration files share one database
+    coverage: {
+      provider: "v8",
+      include: ["src/server/**", "src/lib/**"],
+      exclude: ["src/server/log.ts"],
+      reporter: ["text-summary", "text", "html"],
+    },
     projects: [
       { resolve: { alias }, test: { name: "unit", include: ["tests/unit/**/*.test.ts"] } },
       {

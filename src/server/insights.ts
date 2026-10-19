@@ -182,6 +182,7 @@ export async function tilesWithStock(db: TenantDb) {
       zone: l.zone,
       row: l.row,
       column: l.column,
+      level: l.level,
       type: l.type,
       capacity: l.capacity,
       isActive: l.isActive,

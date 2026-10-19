@@ -8,6 +8,10 @@ import { DataTable, type Column, type Filter } from "@/components/data-table";
 import { Sheet, SheetContent } from "@/components/ui/menu";
 import { Badge, EmptyState } from "@/components/ui/primitives";
 import { cn, fmtDate, fmtNumber } from "@/lib/utils";
+import { rowLetter } from "@/lib/tile";
+import { FormError, useSubmit } from "@/components/forms";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { setTileActiveAction } from "./actions";
 import type { TileWithStock } from "@/server/insights";
 
 const TYPES = ["STORAGE", "RECEIVING", "DISPATCH", "DAMAGED", "QUARANTINE", "RETURN"] as const;
@@ -47,8 +51,18 @@ export function ViewTabs() {
   );
 }
 
-function TileSheet({ tile, onClose }: { tile: TileWithStock | null; onClose: () => void }) {
+function TileSheet({
+  tile,
+  onClose,
+  canManage,
+}: {
+  tile: TileWithStock | null;
+  onClose: () => void;
+  canManage?: boolean;
+}) {
   const t = useTranslations("map");
+  const to = useTranslations("ops");
+  const { run, pending, error } = useSubmit();
   return (
     <Sheet open={!!tile} onOpenChange={(o) => !o && onClose()}>
       {tile && (
@@ -73,13 +87,34 @@ function TileSheet({ tile, onClose }: { tile: TileWithStock | null; onClose: () 
               ))}
             </ul>
           )}
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-4">
+            <Link href={`/stock/ledger?tile=${tile.code}`} className={buttonVariants({ variant: "secondary" })}>
+              {to("ledger.open")}
+            </Link>
+            {canManage && (
+              <Button
+                variant="ghost"
+                loading={pending}
+                onClick={() =>
+                  run(
+                    setTileActiveAction,
+                    { id: tile.id, isActive: !tile.isActive },
+                    { success: to("saved"), then: onClose },
+                  )
+                }
+              >
+                {tile.isActive ? to("deactivate") : to("activate")}
+              </Button>
+            )}
+          </div>
+          <FormError error={error} />
         </SheetContent>
       )}
     </Sheet>
   );
 }
 
-export function LocationsTable({ tiles }: { tiles: TileWithStock[] }) {
+export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; canManage?: boolean }) {
   const t = useTranslations("locations");
   const [open, setOpen] = useState<TileWithStock | null>(null);
   const columns: Column<TileWithStock>[] = [
@@ -147,18 +182,21 @@ export function LocationsTable({ tiles }: { tiles: TileWithStock[] }) {
         onRowClick={setOpen}
         exportName="tiles"
       />
-      <TileSheet tile={open} onClose={() => setOpen(null)} />
+      <TileSheet tile={open} onClose={() => setOpen(null)} canManage={canManage} />
     </>
   );
 }
 
-export function FloorMap({ tiles }: { tiles: TileWithStock[] }) {
+export function FloorMap({ tiles, canManage }: { tiles: TileWithStock[]; canManage?: boolean }) {
   const t = useTranslations("map");
   const tl = useTranslations("locations");
   const [open, setOpen] = useState<TileWithStock | null>(null);
   const storage = tiles.filter((x) => x.type === "STORAGE");
   const special = tiles.filter((x) => x.type !== "STORAGE");
-  const zones = [...new Set(storage.map((x) => x.zone))];
+  const levels = [...new Set(storage.map((x) => x.level))].sort((a, b) => a - b);
+  const [level, setLevel] = useState(levels[0] ?? 1);
+  const onLevel = storage.filter((x) => x.level === level);
+  const zones = [...new Set(onLevel.map((x) => x.zone))];
 
   const Tile = ({ tile, wide }: { tile: TileWithStock; wide?: boolean }) => {
     const level = fillLevel(tile);
@@ -167,7 +205,7 @@ export function FloorMap({ tiles }: { tiles: TileWithStock[] }) {
         onClick={() => setOpen(tile)}
         data-testid={`tile-${tile.code}`}
         className={cn(
-          "flex min-h-14 flex-col items-start justify-between rounded-md border p-1.5 text-left transition-transform duration-150 hover:-translate-y-px hover:shadow-sm sm:min-h-16 sm:p-2",
+          "relative flex min-h-14 min-w-12 flex-col items-start justify-between rounded-md border p-1.5 text-left transition-transform duration-150 hover:-translate-y-px hover:shadow-sm sm:min-h-16 sm:p-2",
           FILL_CLS[level],
           wide && "min-w-36",
           !tile.isActive && "opacity-50",
@@ -175,7 +213,7 @@ export function FloorMap({ tiles }: { tiles: TileWithStock[] }) {
       >
         <span className="sr-only">{`${tile.code}: ${fmtNumber(tile.units)} / ${tile.capacity ?? "—"} (${t(level)})`}</span>
         <span aria-hidden className="font-mono text-[10px] leading-none font-medium text-foreground sm:text-[11px]">
-          {wide ? tile.code : `${String(tile.row).padStart(2, "0")}-${tile.column}`}
+          {wide ? tile.code : `${rowLetter(tile.row)}-${String(tile.column).padStart(2, "0")}`}
         </span>
         <span aria-hidden className="text-xs font-semibold tabular sm:text-sm">
           {tile.fill == null ? fmtNumber(tile.units) : `${Math.round(tile.fill * 100)}%`}
@@ -196,8 +234,30 @@ export function FloorMap({ tiles }: { tiles: TileWithStock[] }) {
         ))}
       </div>
 
+      {levels.length > 1 && (
+        <div
+          className="inline-flex flex-wrap gap-1 rounded-md border border-line bg-surface p-0.5"
+          role="group"
+          aria-label={t("level")}
+        >
+          {levels.map((l) => (
+            <button
+              key={l}
+              onClick={() => setLevel(l)}
+              aria-pressed={l === level}
+              className={cn(
+                "min-h-9 rounded px-3 text-sm text-muted pointer-coarse:min-h-11",
+                l === level && "bg-primary-soft font-medium text-primary",
+              )}
+            >
+              {t("levelN", { level: l })}
+            </button>
+          ))}
+        </div>
+      )}
+
       {zones.map((zone) => {
-        const zt = storage.filter((x) => x.zone === zone);
+        const zt = onLevel.filter((x) => x.zone === zone);
         const cols = Math.max(...zt.map((x) => x.column));
         return (
           <section
@@ -212,10 +272,17 @@ export function FloorMap({ tiles }: { tiles: TileWithStock[] }) {
                 · {fmtNumber(zt.reduce((s, x) => s + x.units, 0))} {tl("cols.units").toLowerCase()}
               </span>
             </h2>
-            <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-              {zt.map((tile) => (
-                <Tile key={tile.id} tile={tile} />
-              ))}
+            <div className="relative overflow-x-auto pb-1">
+              <div
+                className="grid gap-1.5 sm:gap-2"
+                style={{ gridTemplateColumns: `repeat(${cols}, minmax(3rem, 1fr))` }}
+              >
+                {zt.map((tile) => (
+                  <div key={tile.id} style={{ gridRow: tile.row || undefined, gridColumn: tile.column }}>
+                    <Tile tile={tile} />
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         );
@@ -234,7 +301,7 @@ export function FloorMap({ tiles }: { tiles: TileWithStock[] }) {
           </div>
         </section>
       )}
-      <TileSheet tile={open} onClose={() => setOpen(null)} />
+      <TileSheet tile={open} onClose={() => setOpen(null)} canManage={canManage} />
     </div>
   );
 }

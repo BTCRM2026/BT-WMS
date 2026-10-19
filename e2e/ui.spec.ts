@@ -12,6 +12,20 @@ const SCREENS = [
   { path: "/search?q=shampoo", title: "Search" },
   { path: "/settings/password", title: "Change password" },
   { path: "/sales-orders", title: "Sales orders" },
+  { path: "/purchase-orders", title: "Purchase orders" },
+  { path: "/inward", title: "Inward receipts" },
+  { path: "/inward/putaway", title: "Putaway" },
+  { path: "/picking", title: "Pick lists" },
+  { path: "/dispatch", title: "Dispatch" },
+  { path: "/transfers", title: "Internal transfer" },
+  { path: "/returns", title: "Returns" },
+  { path: "/damages", title: "Damage & expiry write-offs" },
+  { path: "/stock-audits", title: "Stock audits (cycle counts)" },
+  { path: "/adjustments", title: "Adjustments" },
+  { path: "/stock/ledger", title: "Movement ledger" },
+  { path: "/users", title: "Users" },
+  { path: "/products/import", title: "Import products" },
+  { path: "/locations/new", title: "New tile" },
 ];
 
 async function noHorizontalScroll(page: import("@playwright/test").Page) {
@@ -32,6 +46,7 @@ test("login screen", async ({ page }, info) => {
 });
 
 test("main screens render without sideways scroll", async ({ page }, info) => {
+  test.setTimeout(300_000);
   await loginOk(page, "owner@btwarehouse.test");
   const width = page.viewportSize()!.width;
   for (const s of SCREENS) {

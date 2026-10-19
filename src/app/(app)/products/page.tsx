@@ -1,4 +1,7 @@
+import { Plus, Upload } from "lucide-react";
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/primitives";
 import { requirePage } from "@/server/auth/context";
 import { stockByProduct } from "@/server/insights";
@@ -9,6 +12,7 @@ export const metadata = { title: "Products" };
 export default async function ProductsPage() {
   const ctx = await requirePage("products.view");
   const t = await getTranslations("products");
+  const to = await getTranslations("ops");
   const [products, stock] = await Promise.all([
     ctx.db.product.findMany({
       orderBy: { sku: "asc" },
@@ -33,7 +37,22 @@ export default async function ProductsPage() {
 
   return (
     <>
-      <PageHeader title={t("title")} subtitle={t("subtitle", { company: ctx.company.name })} />
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle", { company: ctx.company.name })}
+        actions={
+          ctx.can("products.manage") && (
+            <>
+              <Link href="/products/import" className={buttonVariants({ variant: "secondary" })}>
+                <Upload /> {to("prod.import")}
+              </Link>
+              <Link href="/products/new" className={buttonVariants()}>
+                <Plus /> {to("prod.newTitle")}
+              </Link>
+            </>
+          )
+        }
+      />
       <ProductsTable rows={rows} />
     </>
   );

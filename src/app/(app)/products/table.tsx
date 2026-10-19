@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DataTable, type Column, type Filter } from "@/components/data-table";
 import { Badge } from "@/components/ui/primitives";
@@ -23,6 +24,7 @@ const TONE = { ok: "success", low: "warning", out: "danger" } as const;
 
 export function ProductsTable({ rows }: { rows: Row[] }) {
   const t = useTranslations("products");
+  const router = useRouter();
   const columns: Column<Row>[] = [
     { key: "sku", header: t("cols.sku"), value: (r) => r.sku },
     { key: "name", header: t("cols.name"), value: (r) => r.name, primary: true },
@@ -62,6 +64,7 @@ export function ProductsTable({ rows }: { rows: Row[] }) {
       searchPlaceholder={t("searchPlaceholder")}
       emptyText={t("empty")}
       exportName="products"
+      onRowClick={(r) => router.push(`/products/${r.id}`)}
     />
   );
 }

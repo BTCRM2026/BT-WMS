@@ -21,7 +21,6 @@ const ICON = { product: Package, tile: Grid3x3, batch: Boxes };
 
 export function Scanner() {
   const t = useTranslations("scan");
-  const tc = useTranslations("common");
   const video = useRef<HTMLVideoElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -174,23 +173,20 @@ export function Scanner() {
         <h2 className="mb-2 text-sm font-semibold text-muted">{t("floorTasks")}</h2>
         <div className="grid grid-cols-3 gap-2">
           {[
-            { label: t("pick"), Icon: ClipboardList },
-            { label: t("putaway"), Icon: PackageCheck },
-            { label: t("count"), Icon: Boxes },
-          ].map(({ label, Icon: I }) => (
-            <button
+            { label: t("pick"), Icon: ClipboardList, href: "/picking" },
+            { label: t("putaway"), Icon: PackageCheck, href: "/inward/putaway" },
+            { label: t("count"), Icon: Boxes, href: "/stock-audits" },
+          ].map(({ label, Icon: I, href }) => (
+            <Link
               key={label}
-              disabled
-              aria-disabled
-              className="flex min-h-20 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-line-strong text-sm text-muted"
+              href={href}
+              className="flex min-h-20 flex-col items-center justify-center gap-1 rounded-lg border border-line bg-surface text-sm font-medium shadow-sm hover:bg-surface-2"
             >
-              <I className="size-6" aria-hidden />
+              <I className="size-6 text-primary" aria-hidden />
               {label}
-              <span className="text-[11px]">{t("taskSoon")}</span>
-            </button>
+            </Link>
           ))}
-        </div>
-        <p className="sr-only">{tc("comingSoon")}</p>
+        </div>{" "}
       </section>
     </div>
   );
