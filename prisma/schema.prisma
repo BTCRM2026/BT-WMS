@@ -77,7 +77,26 @@ enum PickListStatus {
 enum StockAuditStatus {
   OPEN
   COUNTING
+  SUBMITTED
   CLOSED
+  CANCELLED
+}
+
+enum ReturnStatus {
+  RECEIVED
+  INSPECTED
+  CLOSED
+}
+
+enum ReturnDisposition {
+  RESTOCK
+  DAMAGE
+  SEND_BACK
+}
+
+enum WriteOffKind {
+  DAMAGE
+  EXPIRY
 }
 
 // ---------------------------------------------------------------------------
@@ -247,17 +266,17 @@ model Product {
   warehouse       Warehouse @relation(fields: [warehouseId], references: [id])
   defaultLocation Location? @relation(fields: [defaultLocationId, companyId], references: [id, companyId])
 
-  batches             Batch[]
-  movements           StockMovement[]
-  purchaseOrderLines  PurchaseOrderLine[]
-  inwardReceiptLines  InwardReceiptLine[]
-  salesOrderLines     SalesOrderLine[]
-  pickListLines       PickListLine[]
-  dispatchLines       DispatchLine[]
-  returns             StockReturn[]
-  damages             Damage[]
-  stockAuditLines     StockAuditLine[]
-  adjustments         Adjustment[]
+  batches            Batch[]
+  movements          StockMovement[]
+  purchaseOrderLines PurchaseOrderLine[]
+  inwardReceiptLines InwardReceiptLine[]
+  salesOrderLines    SalesOrderLine[]
+  pickListLines      PickListLine[]
+  dispatchLines      DispatchLine[]
+  returns            StockReturn[]
+  damages            Damage[]
+  stockAuditLines    StockAuditLine[]
+  adjustments        Adjustment[]
 
   @@unique([id, companyId])
   @@unique([companyId, sku])
@@ -447,14 +466,22 @@ model InwardReceipt {
 }
 
 model InwardReceiptLine {
-  id              String  @id @default(cuid())
-  companyId       String  @map("company_id")
-  warehouseId     String  @map("warehouse_id")
-  inwardReceiptId String  @map("inward_receipt_id")
-  productId       String  @map("product_id")
-  batchId         String? @map("batch_id")
-  locationId      String  @map("location_id")
-  quantity        Int
+  id                String    @id @default(cuid())
+  companyId         String    @map("company_id")
+  warehouseId       String    @map("warehouse_id")
+  inwardReceiptId   String    @map("inward_receipt_id")
+  productId         String    @map("product_id")
+  batchId           String?   @map("batch_id")
+  /// Receiving tile the good units sit on until putaway.
+  locationId        String    @map("location_id")
+  /// Good units received (become available only after putaway).
+  quantity          Int
+  expectedQuantity  Int?      @map("expected_quantity")
+  damagedQuantity   Int       @default(0) @map("damaged_quantity")
+  shortQuantity     Int       @default(0) @map("short_quantity")
+  putawayLocationId String?   @map("putaway_location_id")
+  putawayAt         DateTime? @map("putaway_at")
+  putawayById       String?   @map("putaway_by_id")
 
   inwardReceipt InwardReceipt @relation(fields: [inwardReceiptId, companyId], references: [id, companyId], onDelete: Cascade)
   product       Product       @relation(fields: [productId, companyId], references: [id, companyId])
@@ -527,15 +554,18 @@ model PickList {
 }
 
 model PickListLine {
-  id             String  @id @default(cuid())
-  companyId      String  @map("company_id")
-  warehouseId    String  @map("warehouse_id")
-  pickListId     String  @map("pick_list_id")
-  productId      String  @map("product_id")
-  batchId        String? @map("batch_id")
-  locationId     String  @map("location_id")
+  id             String    @id @default(cuid())
+  companyId      String    @map("company_id")
+  warehouseId    String    @map("warehouse_id")
+  pickListId     String    @map("pick_list_id")
+  productId      String    @map("product_id")
+  batchId        String?   @map("batch_id")
+  locationId     String    @map("location_id")
   quantity       Int
-  pickedQuantity Int     @default(0) @map("picked_quantity")
+  pickedQuantity Int       @default(0) @map("picked_quantity")
+  confirmedAt    DateTime? @map("confirmed_at")
+  confirmedById  String?   @map("confirmed_by_id")
+  shortReason    String?   @map("short_reason")
 
   pickList PickList @relation(fields: [pickListId, companyId], references: [id, companyId], onDelete: Cascade)
   product  Product  @relation(fields: [productId, companyId], references: [id, companyId])
@@ -555,6 +585,12 @@ model Dispatch {
   status         DocumentStatus @default(DRAFT)
   vehicleNo      String?        @map("vehicle_no")
   trackingNo     String?        @map("tracking_no")
+  lrNumber       String?        @map("lr_number")
+  transporter    String?
+  packedAt       DateTime?      @map("packed_at")
+  createdById    String?        @map("created_by_id")
+  cancelledAt    DateTime?      @map("cancelled_at")
+  cancelReason   String?        @map("cancel_reason")
   dispatchedAt   DateTime?      @map("dispatched_at")
   createdAt      DateTime       @default(now()) @map("created_at")
 
@@ -569,13 +605,15 @@ model Dispatch {
 }
 
 model DispatchLine {
-  id          String  @id @default(cuid())
-  companyId   String  @map("company_id")
-  warehouseId String  @map("warehouse_id")
-  dispatchId  String  @map("dispatch_id")
-  productId   String  @map("product_id")
-  batchId     String? @map("batch_id")
-  quantity    Int
+  id             String  @id @default(cuid())
+  companyId      String  @map("company_id")
+  warehouseId    String  @map("warehouse_id")
+  dispatchId     String  @map("dispatch_id")
+  productId      String  @map("product_id")
+  batchId        String? @map("batch_id")
+  locationId     String? @map("location_id")
+  pickListLineId String? @map("pick_list_line_id")
+  quantity       Int
 
   dispatch Dispatch @relation(fields: [dispatchId, companyId], references: [id, companyId], onDelete: Cascade)
   product  Product  @relation(fields: [productId, companyId], references: [id, companyId])
@@ -586,19 +624,25 @@ model DispatchLine {
 }
 
 model StockReturn {
-  id           String         @id @default(cuid())
-  companyId    String         @map("company_id")
-  warehouseId  String         @map("warehouse_id")
-  returnNumber String         @map("return_number")
-  salesOrderId String?        @map("sales_order_id")
-  productId    String         @map("product_id")
-  batchId      String?        @map("batch_id")
-  locationId   String         @map("location_id")
-  quantity     Int
-  reason       String
-  status       DocumentStatus @default(DRAFT)
-  createdById  String         @map("created_by_id")
-  createdAt    DateTime       @default(now()) @map("created_at")
+  id                String             @id @default(cuid())
+  companyId         String             @map("company_id")
+  warehouseId       String             @map("warehouse_id")
+  returnNumber      String             @map("return_number")
+  salesOrderId      String?            @map("sales_order_id")
+  productId         String             @map("product_id")
+  batchId           String?            @map("batch_id")
+  locationId        String             @map("location_id")
+  quantity          Int
+  reason            String
+  customerName      String?            @map("customer_name")
+  status            ReturnStatus       @default(RECEIVED)
+  disposition       ReturnDisposition?
+  inspectionNotes   String?            @map("inspection_notes")
+  restockLocationId String?            @map("restock_location_id")
+  inspectedById     String?            @map("inspected_by_id")
+  inspectedAt       DateTime?          @map("inspected_at")
+  createdById       String             @map("created_by_id")
+  createdAt         DateTime           @default(now()) @map("created_at")
 
   company    Company     @relation(fields: [companyId], references: [id])
   warehouse  Warehouse   @relation(fields: [warehouseId], references: [id])
@@ -621,8 +665,12 @@ model Damage {
   locationId   String         @map("location_id")
   quantity     Int
   reason       String
+  kind         WriteOffKind   @default(DAMAGE)
   status       DocumentStatus @default(DRAFT)
   reportedById String         @map("reported_by_id")
+  approvedById String?        @map("approved_by_id")
+  approvedAt   DateTime?      @map("approved_at")
+  returnId     String?        @map("return_id")
   createdAt    DateTime       @default(now()) @map("created_at")
 
   company   Company   @relation(fields: [companyId], references: [id])
@@ -636,14 +684,16 @@ model Damage {
 }
 
 model StockAudit {
-  id          String           @id @default(cuid())
-  companyId   String           @map("company_id")
-  warehouseId String           @map("warehouse_id")
-  auditNumber String           @map("audit_number")
-  status      StockAuditStatus @default(OPEN)
-  startedAt   DateTime         @default(now()) @map("started_at")
-  closedAt    DateTime?        @map("closed_at")
-  createdById String           @map("created_by_id")
+  id            String           @id @default(cuid())
+  companyId     String           @map("company_id")
+  warehouseId   String           @map("warehouse_id")
+  auditNumber   String           @map("audit_number")
+  status        StockAuditStatus @default(OPEN)
+  startedAt     DateTime         @default(now()) @map("started_at")
+  closedAt      DateTime?        @map("closed_at")
+  createdById   String           @map("created_by_id")
+  submittedById String?          @map("submitted_by_id")
+  approvedById  String?          @map("approved_by_id")
 
   company     Company          @relation(fields: [companyId], references: [id])
   warehouse   Warehouse        @relation(fields: [warehouseId], references: [id])
@@ -665,6 +715,7 @@ model StockAuditLine {
   locationId      String  @map("location_id")
   systemQuantity  Int     @map("system_quantity")
   countedQuantity Int?    @map("counted_quantity")
+  varianceReason  String? @map("variance_reason")
 
   stockAudit StockAudit @relation(fields: [stockAuditId, companyId], references: [id, companyId], onDelete: Cascade)
   product    Product    @relation(fields: [productId, companyId], references: [id, companyId])
@@ -690,6 +741,7 @@ model Adjustment {
   status           DocumentStatus @default(DRAFT)
   createdById      String         @map("created_by_id")
   approvedById     String?        @map("approved_by_id")
+  approvedAt       DateTime?      @map("approved_at")
   createdAt        DateTime       @default(now()) @map("created_at")
 
   company    Company     @relation(fields: [companyId], references: [id])
@@ -701,4 +753,41 @@ model Adjustment {
 
   @@unique([companyId, adjustmentNumber])
   @@map("adjustments")
+}
+
+// ---------------------------------------------------------------------------
+// Support tables
+// ---------------------------------------------------------------------------
+
+/// One row per submitted form (client-generated key). A double click or retry
+/// with the same key gets the stored result instead of a second write.
+model IdempotencyKey {
+  id        String   @id @default(cuid())
+  companyId String   @map("company_id")
+  key       String
+  action    String
+  result    Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([companyId, key])
+  @@index([createdAt])
+  @@map("idempotency_keys")
+}
+
+/// Small uploaded files (e.g. damage photos), kept in Postgres so they survive
+/// Railway redeploys. Size and type are checked before insert.
+model Attachment {
+  id           String   @id @default(cuid())
+  companyId    String   @map("company_id")
+  entity       String
+  entityId     String   @map("entity_id")
+  fileName     String   @map("file_name")
+  mimeType     String   @map("mime_type")
+  size         Int
+  data         Bytes
+  uploadedById String   @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([companyId, entity, entityId])
+  @@map("attachments")
 }

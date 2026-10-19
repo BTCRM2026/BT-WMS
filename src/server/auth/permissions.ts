@@ -67,9 +67,11 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "picking.view",
     "picking.manage",
     "dispatch.view",
+    "dispatch.manage",
     "returns.view",
     "returns.manage",
     "audit.view",
+    "audit.manage",
   ],
   BILLING: [
     "dashboard.view",

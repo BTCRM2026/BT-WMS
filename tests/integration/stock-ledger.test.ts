@@ -44,10 +44,8 @@ describe("stock_movements is append-only", () => {
     await expect(prisma.$executeRawUnsafe(`TRUNCATE stock_movements CASCADE`)).rejects.toThrow(/append-only/);
   });
 
-  it("quantity must be > 0", async () => {
-    await expect(recordMovements(db, actor, [{ type: "INWARD", productId, locationId, quantity: 0 }])).rejects.toThrow(
-      /quantity_chk/,
-    );
+  it("quantity must be > 0 (zero is skipped, negative is rejected by the CHECK)", async () => {
+    expect(await recordMovements(db, actor, [{ type: "INWARD", productId, locationId, quantity: 0 }])).toEqual([]);
     await expect(recordMovements(db, actor, [{ type: "INWARD", productId, locationId, quantity: -5 }])).rejects.toThrow(
       /quantity_chk/,
     );

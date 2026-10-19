@@ -53,6 +53,19 @@ export async function createTenantRows(companyId: string, tag: string) {
     },
   });
   const log = await prisma.auditLog.create({ data: { companyId, action: "test", entity: "test" } });
+  const idem = await prisma.idempotencyKey.create({ data: { companyId, key: `fixture-${tag}`, action: "test" } });
+  const file = await prisma.attachment.create({
+    data: {
+      companyId,
+      entity: "test",
+      entityId: po.id,
+      fileName: "a.png",
+      mimeType: "image/png",
+      size: 1,
+      data: Buffer.from([1]),
+      uploadedById: user.id,
+    },
+  });
 
   return {
     User: user.id,
@@ -77,5 +90,7 @@ export async function createTenantRows(companyId: string, tag: string) {
     StockAuditLine: saLine.id,
     Adjustment: adj.id,
     AuditLog: log.id,
+    IdempotencyKey: idem.id,
+    Attachment: file.id,
   } as Record<string, string>;
 }

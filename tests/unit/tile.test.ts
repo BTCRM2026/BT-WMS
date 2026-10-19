@@ -1,14 +1,22 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { formatTileCode, isTileForCompany, parseTileCode, TILE_CODE_RE } from "@/lib/tile";
+import {
+  expandRows,
+  formatTileCode,
+  isTileForCompany,
+  parseTileCode,
+  rowLetter,
+  rowNumber,
+  TILE_CODE_RE,
+} from "@/lib/tile";
 
 describe("tile code validator", () => {
-  it("parses the documented example", () => {
-    expect(parseTileCode("BT-A-03-1")).toEqual({ company: "BT", zone: "A", row: 3, column: 1 });
+  it("parses the documented example: zone BT, row A, column 03, level 1", () => {
+    expect(parseTileCode("BT-A-03-1")).toEqual({ zone: "BT", row: "A", column: 3, level: 1 });
   });
 
   it("normalises case and whitespace", () => {
-    expect(parseTileCode("  rf-b-12-10 ")).toEqual({ company: "RF", zone: "B", row: 12, column: 10 });
+    expect(parseTileCode("  rf2-b-12-10 ")).toEqual({ zone: "RF2", row: "B", column: 12, level: 10 });
   });
 
   it.each([
@@ -25,15 +33,27 @@ describe("tile code validator", () => {
   ])("rejects %j", (code) => expect(parseTileCode(code)).toBeNull());
 
   it("round-trips format -> parse", () => {
-    const p = { company: "RF", zone: "RT", row: 7, column: 4 };
-    expect(formatTileCode(p)).toBe("RF-RT-07-4");
+    const p = { zone: "RFX", row: "RT", column: 7, level: 2 };
+    expect(formatTileCode(p)).toBe("RFX-RT-07-2");
     expect(parseTileCode(formatTileCode(p))).toEqual(p);
   });
 
-  it("checks the tile belongs to the company", () => {
+  it("checks the tile is in one of the company's zones", () => {
     expect(isTileForCompany("BT-A-03-1", "BT")).toBe(true);
+    expect(isTileForCompany("BTX-R-01-1", "BT")).toBe(true);
     expect(isTileForCompany("RF-A-03-1", "BT")).toBe(false);
     expect(isTileForCompany("garbage", "BT")).toBe(false);
+  });
+
+  it("converts row letters to numbers and back", () => {
+    expect([rowNumber("A"), rowNumber("F"), rowNumber("Z"), rowNumber("AA")]).toEqual([1, 6, 26, 27]);
+    expect([rowLetter(1), rowLetter(26), rowLetter(27)]).toEqual(["A", "Z", "AA"]);
+  });
+
+  it("expands row ranges for bulk generation", () => {
+    expect(expandRows("A-F")).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(expandRows("a, c-d")).toEqual(["A", "C", "D"]);
+    expect(() => expandRows("1-3")).toThrow();
   });
 
   it("matches the database CHECK constraint pattern", () => {

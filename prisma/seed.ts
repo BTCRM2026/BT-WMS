@@ -6,7 +6,7 @@
 import { PrismaClient, type LocationType, type Role } from "@prisma/client";
 import { hashPassword } from "../src/server/auth/password";
 import { ROLE_PERMISSIONS } from "../src/server/auth/permissions";
-import { formatTileCode } from "../src/lib/tile";
+import { formatTileCode, rowNumber } from "../src/lib/tile";
 
 const prisma = new PrismaClient();
 const PASSWORD = process.env.SEED_PASSWORD ?? "ChangeMe!2026";
@@ -93,11 +93,11 @@ async function main() {
       });
     }
 
-    // Tiles: storage zones A and B (4 rows x 5 columns), plus one tile per special area.
-    const tiles: { zone: string; row: number; column: number; type: LocationType; capacity: number }[] = [];
-    for (const zone of ["A", "B"])
-      for (let row = 1; row <= 4; row++)
-        for (let column = 1; column <= 5; column++) tiles.push({ zone, row, column, type: "STORAGE", capacity: 200 });
+    // Tiles: storage zone <code> with rows A-D x columns 01-10 at level 1, plus special areas in zone <code>X.
+    const tiles: { zone: string; row: string; column: number; type: LocationType; capacity: number }[] = [];
+    for (const row of ["A", "B", "C", "D"])
+      for (let column = 1; column <= 10; column++)
+        tiles.push({ zone: c.code, row, column, type: "STORAGE", capacity: 200 });
     const special: [string, LocationType][] = [
       ["R", "RECEIVING"],
       ["D", "DISPATCH"],
@@ -105,11 +105,11 @@ async function main() {
       ["Q", "QUARANTINE"],
       ["RT", "RETURN"],
     ];
-    for (const [zone, type] of special) tiles.push({ zone, row: 1, column: 1, type, capacity: 1000 });
+    for (const [row, type] of special) tiles.push({ zone: `${c.code}X`, row, column: 1, type, capacity: 2000 });
 
     const locations: Awaited<ReturnType<typeof prisma.location.upsert>>[] = [];
     for (const t of tiles) {
-      const code = formatTileCode({ company: c.code, zone: t.zone, row: t.row, column: t.column });
+      const code = formatTileCode({ zone: t.zone, row: t.row, column: t.column, level: 1 });
       locations.push(
         await prisma.location.upsert({
           where: { warehouseId_code: { warehouseId: warehouse.id, code } },
@@ -118,9 +118,9 @@ async function main() {
             ...scope,
             code,
             zone: t.zone,
-            row: t.row,
+            row: rowNumber(t.row),
             column: t.column,
-            level: 0,
+            level: 1,
             type: t.type,
             capacity: t.capacity,
           },
