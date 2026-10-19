@@ -1,3 +1,4 @@
+import { prisma } from "@/server/db/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { getContext, requirePage } from "@/server/auth/context";
 import { switchCompany } from "@/app/(app)/actions";
@@ -56,7 +57,7 @@ describe("company switching", () => {
     const ctx = (await getContext())!;
     expect(ctx.company.id).toBe(rf.id);
     const products = await ctx.db.product.findMany();
-    expect(products.length).toBe(50);
+    expect(products.length).toBe(await prisma.product.count({ where: { companyId: rf.id } }));
     expect(products.every((p) => p.companyId === rf.id)).toBe(true);
   });
 
