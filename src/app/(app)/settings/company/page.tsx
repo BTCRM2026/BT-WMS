@@ -26,7 +26,7 @@ export default async function CompanySettingsPage() {
         <Card className="p-4 sm:p-5">
           <h2 className="font-semibold">{t("exportTitle")}</h2>
           <p className="mt-1 mb-3 text-sm text-muted">{t("exportHint")}</p>
-          { }
+          {}
           <a
             href="/api/export"
             download

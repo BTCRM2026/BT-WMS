@@ -27,7 +27,7 @@ export default async function OwnerPage() {
   return (
     <>
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      <Card className="overflow-x-auto">
+      <Card className="overflow-x-auto" tabIndex={0} aria-label={t("title")}>
         <table className="w-full min-w-[560px] text-sm" data-testid="owner-table">
           <thead className="bg-surface-2 text-left text-muted">
             <tr>

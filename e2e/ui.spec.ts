@@ -99,7 +99,6 @@ test("phones get big touch targets", async ({ page }) => {
 test("tables: sort, filter, export", async ({ page }) => {
   await loginOk(page, "admin@bondtherapy.test");
   await page.goto("/products");
-  await page.waitForLoadState("networkidle"); // let the table hydrate before typing
   const table = page.getByTestId("table-products");
   await table.getByRole("searchbox").fill("BT-0001");
   await expect(table.getByText("1–1 of 1")).toBeVisible();

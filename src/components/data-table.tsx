@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -110,11 +110,13 @@ export function DataTable<T extends { id: string }>({
   const [view, setView] = useState<View>(defaults);
   const [saved, setSaved] = useState<Record<string, View>>({});
   const [page, setPage] = useState(0);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Restore the last view and saved views (per table, per browser).
   useEffect(() => {
     // Only adopt ?q= from the URL; never wipe what the user already typed before hydration finished.
-    const q = new URLSearchParams(window.location.search).get("q");
+    // Keep anything typed before hydration finished, else adopt ?q= from the URL.
+    const q = searchRef.current?.value || new URLSearchParams(window.location.search).get("q");
     setView((v) => ({ ...v, ...(q ? { q } : {}), hidden: load(`table:${id}:hidden`, v.hidden) }));
     setSaved(load(`table:${id}:views`, {}));
   }, [id]);
@@ -204,6 +206,7 @@ export function DataTable<T extends { id: string }>({
             aria-hidden
           />
           <input
+            ref={searchRef}
             type="search"
             value={view.q}
             onChange={(e) => update({ q: e.target.value })}
