@@ -3,6 +3,7 @@ import { HttpError, type Context } from "@/server/auth/context";
 import { audit } from "@/server/audit";
 import { computeVariance } from "@/lib/variance";
 import { postMovements } from "@/server/stock";
+import { getSettings } from "./settings";
 import { actorOf, balanceAt, docNo, lineScope, once, scopeOf, specialTile, tileByCode } from "./core";
 
 const qty = z.coerce.number().int("Whole numbers only").min(1, "At least 1").max(1_000_000);
@@ -196,6 +197,16 @@ export const writeOffSchema = z.object({
 /** Report a write-off. Nothing moves until a WAREHOUSE_MANAGER (or above) approves it. */
 export async function reportWriteOff(ctx: Context, input: z.input<typeof writeOffSchema>) {
   const v = writeOffSchema.parse(input);
+  const r = await reportWriteOffOnce(ctx, v);
+  // Owner setting: write-offs may skip approval.
+  if (!(await getSettings(ctx.db, ctx.company.id)).writeOffApproval) {
+    const d = await ctx.db.damage.findUnique({ where: { id: r.id } });
+    if (d?.status === "DRAFT") await decideWriteOff(ctx, { id: r.id, approve: true });
+  }
+  return r;
+}
+
+async function reportWriteOffOnce(ctx: Context, v: z.output<typeof writeOffSchema>) {
   return once(ctx, v.key, "writeoff.report", async (tx) => {
     const tile = await tileByCode(tx, ctx, v.tileCode);
     const have = await balanceAt(tx, v.productId, tile.id, v.batchId ?? null);
@@ -319,6 +330,16 @@ export const enterCountsSchema = z.object({
 /** Enter physical counts; with submit=true every variance must carry a reason. */
 export async function enterCounts(ctx: Context, input: z.input<typeof enterCountsSchema>) {
   const v = enterCountsSchema.parse(input);
+  const r = await enterCountsOnce(ctx, v);
+  // Owner setting: counts may adjust stock without a second approval.
+  if (r.status === "SUBMITTED" && !(await getSettings(ctx.db, ctx.company.id)).countApproval) {
+    await approveCount(ctx, { auditId: v.auditId, approve: true });
+    return { ...r, status: "CLOSED" };
+  }
+  return r;
+}
+
+async function enterCountsOnce(ctx: Context, v: z.output<typeof enterCountsSchema>) {
   return once(ctx, v.key, "count.enter", async (tx) => {
     const a = await tx.stockAudit.findUnique({ where: { id: v.auditId }, include: { lines: true } });
     if (!a) throw new HttpError(404, "Count not found.");

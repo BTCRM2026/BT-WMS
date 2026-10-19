@@ -26,6 +26,11 @@ const SCREENS = [
   { path: "/users", title: "Users" },
   { path: "/products/import", title: "Import products" },
   { path: "/locations/new", title: "New tile" },
+  { path: "/reports", title: "Reports" },
+  { path: "/owner", title: "Owner view" },
+  { path: "/labels", title: "Labels" },
+  { path: "/settings/company", title: "Company settings" },
+  { path: "/audit-log", title: "Audit log" },
 ];
 
 async function noHorizontalScroll(page: import("@playwright/test").Page) {

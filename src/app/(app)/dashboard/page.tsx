@@ -1,4 +1,16 @@
-import { AlertTriangle, Boxes, CalendarClock, Clock, Grid3x3, Package, ScanLine } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDownToLine,
+  ClipboardList,
+  PackageCheck,
+  Truck,
+  Boxes,
+  CalendarClock,
+  Clock,
+  Grid3x3,
+  Package,
+  ScanLine,
+} from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { Badge, Card, CardHeader, PageHeader } from "@/components/ui/primitives";
@@ -17,6 +29,34 @@ export default async function Dashboard() {
   const d = await dashboardData(ctx.db);
 
   const kpis = [
+    {
+      label: t("kpi.todayIn"),
+      value: fmtNumber(d.kpis.todayIn),
+      icon: ArrowDownToLine,
+      tone: "text-success bg-success-soft",
+      href: "/inward",
+    },
+    {
+      label: t("kpi.todayOut"),
+      value: fmtNumber(d.kpis.todayOut),
+      icon: Truck,
+      tone: "text-brand bg-brand-soft",
+      href: "/dispatch",
+    },
+    {
+      label: t("kpi.pendingPutaway"),
+      value: fmtNumber(d.kpis.pendingPutaway),
+      icon: PackageCheck,
+      tone: "text-warning bg-warning-soft",
+      href: "/inward/putaway",
+    },
+    {
+      label: t("kpi.pendingPicks"),
+      value: fmtNumber(d.kpis.pendingPicks),
+      icon: ClipboardList,
+      tone: "text-info bg-info-soft",
+      href: "/picking",
+    },
     { label: t("kpi.skus"), value: fmtNumber(d.kpis.skus), icon: Package, tone: "text-brand bg-brand-soft" },
     { label: t("kpi.units"), value: fmtNumber(d.kpis.units), icon: Boxes, tone: "text-success bg-success-soft" },
     {
@@ -56,8 +96,8 @@ export default async function Dashboard() {
         subtitle={t("subtitle")}
       />
 
-      <ul className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
-        {kpis.map((k, i) => {
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5">
+        {kpis.map((k) => {
           const body = (
             <Card className={cn("h-full p-4 transition-colors duration-150", k.href && "hover:border-line-strong")}>
               <div className="flex items-center justify-between gap-2">
@@ -70,7 +110,7 @@ export default async function Dashboard() {
             </Card>
           );
           return (
-            <li key={k.label} className={cn(i === 0 && "col-span-2 lg:col-span-1")}>
+            <li key={k.label}>
               {k.href ? (
                 <Link href={k.href} className="block h-full rounded-lg">
                   {body}

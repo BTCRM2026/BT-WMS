@@ -92,3 +92,12 @@ src/app/           pages (login, dashboard, modules), server actions, API routes
 src/lib/           shared helpers (tile codes, navigation)
 tests/unit         tests/integration         e2e/
 ```
+
+## Documentation
+
+- [Architecture and database diagram](docs/ARCHITECTURE.md)
+- [User manual with screenshots per role](docs/USER-MANUAL.md)
+- [Tile numbering and slotting guide](docs/TILES.md)
+- [Operations runbook: environments, env vars, deploy, migrations, rollback, backups](docs/RUNBOOK.md)
+- [Go-live checklist and open risks](docs/GO-LIVE.md)
+- [Design system](docs/DESIGN.md), [Phase 3 modules](docs/PHASE3.md)

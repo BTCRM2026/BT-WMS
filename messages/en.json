@@ -49,6 +49,7 @@
     "items": {
       "products": "Products",
       "locations": "Locations / Tiles",
+      "labels": "Labels",
       "stock": "Stock",
       "transfers": "Transfers",
       "inward/putaway": "Putaway",
@@ -62,8 +63,10 @@
       "returns": "Returns",
       "damages": "Damages",
       "reports": "Reports",
+      "owner": "Owner view",
       "users": "Users",
-      "audit-log": "Audit log"
+      "audit-log": "Audit log",
+      "settings/company": "Company settings"
     },
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
@@ -110,6 +113,10 @@
     "title": "{company} dashboard",
     "subtitle": "Live stock position, derived from every recorded movement.",
     "kpi": {
+      "todayIn": "Inward today",
+      "todayOut": "Outward today",
+      "pendingPutaway": "Awaiting putaway",
+      "pendingPicks": "Open pick lists",
       "skus": "Active SKUs",
       "units": "Units in stock",
       "lowStock": "Below minimum",

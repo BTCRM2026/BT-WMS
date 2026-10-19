@@ -38,6 +38,13 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
+      - name: Postgres 17 client (backup/restore drill)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSo /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-17
+          echo "PG_BIN=/usr/lib/postgresql/17/bin" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
@@ -87,6 +94,11 @@ jobs:
         run: LHCI_SESSION=$(node scripts/lhci-session.mjs) npx --yes @lhci/cli@0.15.1 collect
       - name: Assert scores >= 90
         run: npx --yes @lhci/cli@0.15.1 assert
+      - name: Load test (50 concurrent users, autocannon)
+        run: |
+          API_RATE_LIMIT=1000000 node scripts/start.mjs > server.log 2>&1 &
+          npx --yes wait-on@8.0.3 http://localhost:3000/api/health
+          node scripts/load-test.mjs http://localhost:3000 "$(node scripts/lhci-session.mjs)"
       - run: npx --yes @lhci/cli@0.15.1 upload
         if: always()
       - uses: actions/upload-artifact@v4

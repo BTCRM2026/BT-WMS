@@ -4,6 +4,9 @@ import {
   BarChart3,
   Boxes,
   ClipboardCheck,
+  Tag,
+  Settings,
+  Crown,
   ClipboardList,
   FileText,
   Grid3x3,
@@ -30,6 +33,7 @@ export const NAV: NavGroup[] = [
     items: [
       { slug: "products", permission: "products.view", icon: Package, built: true },
       { slug: "locations", permission: "locations.view", icon: Grid3x3, built: true },
+      { slug: "labels", permission: "products.view", icon: Tag, built: true },
     ],
   },
   {
@@ -62,9 +66,11 @@ export const NAV: NavGroup[] = [
   {
     key: "admin",
     items: [
-      { slug: "reports", permission: "reports.view", icon: BarChart3 },
+      { slug: "reports", permission: "reports.view", icon: BarChart3, built: true },
+      { slug: "owner", permission: "company.switch", icon: Crown, built: true },
       { slug: "users", permission: "users.view", icon: Users, built: true },
-      { slug: "audit-log", permission: "auditlog.view", icon: History },
+      { slug: "audit-log", permission: "auditlog.view", icon: History, built: true },
+      { slug: "settings/company", permission: "users.manage", icon: Settings, built: true },
     ],
   },
 ];

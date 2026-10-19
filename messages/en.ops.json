@@ -274,5 +274,95 @@
       "apply": "Show",
       "open": "Ledger"
     }
+  },
+  "reports": {
+    "title": "Reports",
+    "subtitle": "Figures for {company}, computed from the stock ledger.",
+    "report": "Report",
+    "from": "From",
+    "to": "To",
+    "run": "Run report",
+    "search": "Search rows",
+    "empty": "No rows for this period.",
+    "names": {
+      "stock-product": "Current stock by product",
+      "stock-batch": "Current stock by batch",
+      "stock-tile": "Current stock by tile",
+      "valuation": "Stock valuation",
+      "ageing": "Stock ageing",
+      "slow-dead": "Slow and dead stock",
+      "fast-movers": "Fast movers",
+      "inward-outward": "Inward vs outward",
+      "damage-shortage": "Damage and shortage",
+      "audit-variance": "Cycle count variance",
+      "expiry": "Expiry report",
+      "ledger": "Movement ledger",
+      "user-activity": "User activity"
+    }
+  },
+  "owner": {
+    "title": "Owner view",
+    "subtitle": "Both companies side by side. Values at purchase price.",
+    "metric": "Metric",
+    "total": "Total",
+    "value": "Stock value",
+    "mrpValue": "Stock at MRP",
+    "units": "Units in stock",
+    "skus": "Active SKUs",
+    "todayIn": "Inward today",
+    "todayOut": "Outward today",
+    "lowStock": "Below minimum",
+    "nearExpiry": "Expiring in 90 days",
+    "pendingPutaway": "Awaiting putaway",
+    "pendingPicks": "Open pick lists"
+  },
+  "settings": {
+    "title": "Company settings",
+    "subtitle": "Owner controls for {company}.",
+    "approvals": "Approvals and locks",
+    "writeOffApproval": "Write-offs need a manager's approval",
+    "writeOffApprovalHint": "When off, damage and expiry write-offs post immediately.",
+    "countApproval": "Cycle-count variances need a manager's approval",
+    "countApprovalHint": "When off, submitted counts adjust stock immediately.",
+    "lockedBefore": "Lock everything before",
+    "lockedBeforeHint": "Nothing dated before this day can be reversed or cancelled.",
+    "digest": "Daily digest recipients",
+    "digestHint": "Emails or WhatsApp numbers, separated by commas.",
+    "save": "Save settings",
+    "saved": "Settings saved",
+    "exportTitle": "Export all data",
+    "exportHint": "Download every table for this company as an Excel workbook.",
+    "exportButton": "Download export"
+  },
+  "auditlog": {
+    "title": "Audit log",
+    "subtitle": "Who did what, when and from where.",
+    "search": "Search user, action or entity",
+    "empty": "No activity yet.",
+    "when": "When",
+    "user": "User",
+    "action": "Action",
+    "entity": "Record",
+    "details": "Details"
+  },
+  "labels": {
+    "title": "Labels",
+    "subtitle": "Print barcode / QR labels for tiles, products, batches and cartons.",
+    "kind": "Labels for",
+    "kinds": {
+      "tile": "Tiles",
+      "product": "Products",
+      "batch": "Batches",
+      "carton": "Cartons"
+    },
+    "layout": "Paper",
+    "a4": "A4 sheet (3 × 8)",
+    "roll": "Label printer 50 × 25 mm",
+    "symbology": "Code type",
+    "auto": "Automatic",
+    "filter": "Filter",
+    "all": "Select all ({count})",
+    "none": "Clear",
+    "print": "Print {count} labels"
   }
 }

@@ -91,6 +91,10 @@ export async function createTenantRows(companyId: string, tag: string) {
     Adjustment: adj.id,
     AuditLog: log.id,
     IdempotencyKey: idem.id,
+    CompanySetting: (await prisma.companySetting.upsert({ where: { companyId }, update: {}, create: { companyId } }))
+      .id,
+    AlertEvent: (await prisma.alertEvent.create({ data: { companyId, kind: "test", key: tag, message: "fixture" } }))
+      .id,
     Attachment: file.id,
   } as Record<string, string>;
 }

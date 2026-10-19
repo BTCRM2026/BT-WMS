@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { reportServerTrouble } from "@/components/connection-banner";
 import { Input } from "@/components/ui/primitives";
+import { ScanButton } from "@/components/scan-button";
 import { cn } from "@/lib/utils";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -121,25 +122,30 @@ export function ProductSelect({
   );
 }
 
-/** Tile code field: upper-case, works with USB scanners (they type + Enter). */
+/** Tile/product code field: upper-case, camera scan button, and works with USB scanners (they type + Enter). */
 export function TileInput(props: React.ComponentProps<"input">) {
+  const { onChange, className, ...rest } = props;
   return (
-    <Input
-      autoComplete="off"
-      autoCapitalize="characters"
-      spellCheck={false}
-      enterKeyHint="go"
-      placeholder="BT-A-03-1"
-      {...props}
-      onChange={(e) => {
-        e.target.value = e.target.value.toUpperCase();
-        props.onChange?.(e);
-      }}
-      className={cn("font-mono uppercase", props.className)}
-    />
+    <div className="flex min-w-0 gap-2">
+      <Input
+        autoComplete="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        enterKeyHint="go"
+        placeholder="BT-A-03-1"
+        {...rest}
+        onChange={(e) => {
+          e.target.value = e.target.value.toUpperCase();
+          onChange?.(e);
+        }}
+        className={cn("min-w-0 flex-1 font-mono uppercase", className)}
+      />
+      <ScanButton
+        onCode={(code) => onChange?.({ target: { value: code.toUpperCase() } } as React.ChangeEvent<HTMLInputElement>)}
+      />
+    </div>
   );
 }
-
 export function FormError({ error }: { error: string | null }) {
   if (!error) return null;
   return (

@@ -131,8 +131,25 @@ export async function dashboardData(db: TenantDb) {
     if (m) m.units += b.quantity;
   }
 
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [todayMoves, pendingPutaway, pendingPicks] = await Promise.all([
+    db.stockMovement.groupBy({
+      by: ["type"],
+      where: { createdAt: { gte: today }, type: { in: ["INWARD", "OUTWARD"] } },
+      _sum: { quantity: true },
+    }),
+    db.inwardReceiptLine.count({ where: { putawayAt: null, quantity: { gt: 0 } } }),
+    db.pickList.count({ where: { status: { in: ["OPEN", "IN_PROGRESS"] } } }),
+  ]);
+  const todayQty = (type: string) => todayMoves.find((m) => m.type === type)?._sum.quantity ?? 0;
+
   return {
     kpis: {
+      todayIn: todayQty("INWARD"),
+      todayOut: todayQty("OUTWARD"),
+      pendingPutaway,
+      pendingPicks,
       skus,
       units,
       lowStock: alertList.filter((a) => a.kind === "low").length,
@@ -193,3 +210,29 @@ export async function tilesWithStock(db: TenantDb) {
   });
 }
 export type TileWithStock = Awaited<ReturnType<typeof tilesWithStock>>[number];
+
+/** SUPER_ADMIN only: the same headline figures for every company side by side. */
+export async function ownerSummary() {
+  const { prisma } = await import("@/server/db/client");
+  const { tenantDb } = await import("@/server/db/tenant");
+  const { REPORTS } = await import("@/server/reports");
+  const companies = await prisma.company.findMany({ orderBy: { name: "asc" } });
+  return Promise.all(
+    companies.map(async (c) => {
+      const db = tenantDb(c.id);
+      const [d, val] = await Promise.all([
+        dashboardData(db),
+        REPORTS.valuation(db, { from: new Date(0), to: new Date() }),
+      ]);
+      return {
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        brandColor: c.brandColor,
+        ...d.kpis,
+        value: val.totals?.value ?? 0,
+        mrpValue: val.totals?.mrpValue ?? 0,
+      };
+    }),
+  );
+}

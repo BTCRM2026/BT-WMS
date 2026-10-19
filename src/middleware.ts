@@ -2,10 +2,44 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Cheap edge check only (cookie present). The real session check runs on the
 // server in getContext(); this just saves a round-trip for logged-out users.
-const PUBLIC = ["/login", "/api/health"];
+const PUBLIC = ["/login", "/api/health", "/api/cron"];
+
+// ponytail: per-instance memory; move to Redis/Postgres if Railway runs several replicas.
+const hits = new Map<string, { n: number; reset: number }>();
+const LIMIT = Number(process.env.API_RATE_LIMIT ?? 600); // API requests per IP per minute
+
+function rateLimited(ip: string) {
+  const now = Date.now();
+  const h = hits.get(ip);
+  if (!h || h.reset < now) {
+    hits.set(ip, { n: 1, reset: now + 60_000 });
+    if (hits.size > 50_000) hits.clear();
+    return false;
+  }
+  return ++h.n > LIMIT;
+}
 
 export function middleware(req: NextRequest) {
   const requestId = req.headers.get("x-request-id") ?? crypto.randomUUID();
+  const { pathname: path } = req.nextUrl;
+
+  if (path.startsWith("/api/")) {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+    if (rateLimited(ip))
+      return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "retry-after": "60" } });
+    // CSRF: state-changing API calls must come from this site (server actions get Next's own origin check).
+    const origin = req.headers.get("origin");
+    const sameSite = (() => {
+      try {
+        return !!origin && new URL(origin).host === req.headers.get("host");
+      } catch {
+        return false;
+      }
+    })();
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && !path.startsWith("/api/cron") && !sameSite) {
+      return NextResponse.json({ error: "Cross-site request blocked" }, { status: 403 });
+    }
+  }
   const headers = new Headers(req.headers);
   headers.set("x-request-id", requestId);
 

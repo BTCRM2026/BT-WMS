@@ -1,6 +1,7 @@
 import type { MovementType } from "@prisma/client";
 import { audit, type AuditEntry } from "@/server/audit";
 import type { TenantDb } from "@/server/db/tenant";
+import { assertOpenPeriod } from "@/server/ops/settings";
 
 /** The client inside a tenant transaction (same tenant guarantees as TenantDb). */
 export type Tx = Parameters<Extract<Parameters<TenantDb["$transaction"]>[0], (...a: never[]) => unknown>>[0];
@@ -68,6 +69,7 @@ export async function postMovements(tx: Tx, actor: Actor, rows: MovementInput[])
 /** Undo a movement by posting its mirror image. The original row stays untouched. */
 export async function postReversal(tx: Tx, actor: Actor, movementId: string, reason: string) {
   const orig = await tx.stockMovement.findUniqueOrThrow({ where: { id: movementId } });
+  await assertOpenPeriod(tx, orig.companyId, orig.createdAt);
   const m = await tx.stockMovement.create({
     data: {
       companyId: orig.companyId,

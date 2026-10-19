@@ -16,7 +16,7 @@ const ROUTES = walk(API_DIR).map((file) => ({
   file,
   url: "/api/" + path.relative(API_DIR, path.dirname(file)).split(path.sep).join("/"),
 }));
-const PUBLIC_ROUTES = new Set(["/api/health"]);
+const PUBLIC_ROUTES = new Set(["/api/health", "/api/cron/daily"]); // cron: shared-secret POST, tested separately
 const PROTECTED = ROUTES.filter((r) => !PUBLIC_ROUTES.has(r.url));
 
 let rfIds: Set<string>;

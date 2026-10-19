@@ -23,6 +23,11 @@ const SCREENS = [
   "/stock/ledger",
   "/locations/new",
   "/products/import",
+  "/reports",
+  "/owner",
+  "/labels",
+  "/settings/company",
+  "/audit-log",
 ];
 
 async function check(page: import("@playwright/test").Page, label: string) {

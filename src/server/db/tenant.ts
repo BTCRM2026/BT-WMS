@@ -26,7 +26,7 @@ export const TENANT_MODELS = new Set(
 TENANT_MODELS.add("StockBalance");
 
 export const GLOBAL_MODELS = new Set(["Warehouse", "RolePermission"]);
-export const BLOCKED_MODELS = new Set(["Session", "LoginAttempt"]);
+export const BLOCKED_MODELS = new Set(["Session", "LoginAttempt", "JobRun"]);
 
 const WHERE_OPS = new Set([
   "findUnique",

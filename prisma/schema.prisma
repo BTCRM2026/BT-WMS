@@ -791,3 +791,48 @@ model Attachment {
   @@index([companyId, entity, entityId])
   @@map("attachments")
 }
+
+/// Owner controls per company.
+model CompanySetting {
+  id               String    @id @default(cuid())
+  companyId        String    @unique @map("company_id")
+  /// Write-offs (damage/expiry) need a manager's approval before stock moves.
+  writeOffApproval Boolean   @default(true) @map("write_off_approval")
+  /// Cycle-count variances need a manager's approval before adjusting stock.
+  countApproval    Boolean   @default(true) @map("count_approval")
+  /// Soft lock: nothing dated before this may be reversed or cancelled.
+  lockedBefore     DateTime? @map("locked_before")
+  /// Comma-separated emails / phone numbers for the daily digest.
+  digestRecipients String?   @map("digest_recipients")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("company_settings")
+}
+
+/// One row per alert ever raised, so each alert fires exactly once.
+model AlertEvent {
+  id        String    @id @default(cuid())
+  companyId String    @map("company_id")
+  kind      String
+  /// e.g. "<batchId>:30" for "expires within 30 days"
+  key       String
+  message   String
+  sentAt    DateTime? @map("sent_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@unique([companyId, kind, key])
+  @@index([companyId, createdAt])
+  @@map("alert_events")
+}
+
+/// Scheduled job runs; the unique run key guarantees a job runs once per period.
+model JobRun {
+  id         String    @id @default(cuid())
+  job        String
+  runKey     String    @unique @map("run_key")
+  result     Json?
+  startedAt  DateTime  @default(now()) @map("started_at")
+  finishedAt DateTime? @map("finished_at")
+
+  @@map("job_runs")
+}
