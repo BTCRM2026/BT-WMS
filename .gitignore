@@ -14,3 +14,4 @@ next-env.d.ts
 npm-debug.log*
 .DS_Store
 .e2e-db-url
+.seed-credentials.txt
