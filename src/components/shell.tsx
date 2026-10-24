@@ -8,7 +8,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Clock,
-  Grid3x3,
+  DoorOpen,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -312,7 +312,7 @@ function BottomNav({ allowed, onMore }: { allowed: string[]; onMore: () => void 
     { href: "/dashboard", label: t("dashboard"), Icon: LayoutDashboard, show: true },
     { href: "/stock", label: t("items.stock"), Icon: Boxes, show: allowed.includes("stock") },
     { href: "/scan", label: t("scan"), Icon: ScanLine, show: true, primary: true },
-    { href: "/locations/map", label: t("floorMap"), Icon: Grid3x3, show: allowed.includes("locations") },
+    { href: "/locations/rooms", label: t("rooms"), Icon: DoorOpen, show: allowed.includes("locations") },
   ].filter((i) => i.show);
   return (
     <nav

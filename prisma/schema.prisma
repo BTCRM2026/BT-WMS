@@ -115,6 +115,7 @@ model Company {
   products       Product[]
   batches        Batch[]
   locations      Location[]
+  rooms          Room[]
   movements      StockMovement[]
   purchaseOrders PurchaseOrder[]
   inwardReceipts InwardReceipt[]
@@ -141,6 +142,7 @@ model Warehouse {
   products       Product[]
   batches        Batch[]
   locations      Location[]
+  rooms          Room[]
   movements      StockMovement[]
   purchaseOrders PurchaseOrder[]
   inwardReceipts InwardReceipt[]
@@ -348,6 +350,26 @@ model Location {
   @@unique([warehouseId, code])
   @@index([companyId, zone])
   @@map("locations")
+}
+
+/// A room of the warehouse. Its tiles are the locations whose zone equals `zone`, e.g. BT1.
+model Room {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  warehouseId String   @map("warehouse_id")
+  zone        String
+  name        String
+  /// Where it is, e.g. "Near the gate" or "1st floor".
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([id, companyId])
+  @@unique([warehouseId, zone])
+  @@index([companyId])
+  @@map("rooms")
 }
 
 // ---------------------------------------------------------------------------

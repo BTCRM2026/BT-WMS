@@ -31,7 +31,9 @@ const FILL_CLS = {
 export function ViewTabs() {
   const t = useTranslations("locations");
   const path = usePathname();
+  const isCurrent = (href: string) => path === href || (href === "/locations/rooms" && path.startsWith(`${href}/`));
   const tabs = [
+    { href: "/locations/rooms", label: t("viewRooms") },
     { href: "/locations", label: t("viewTable") },
     { href: "/locations/map", label: t("viewMap") },
   ];
@@ -41,10 +43,10 @@ export function ViewTabs() {
         <Link
           key={tab.href}
           href={tab.href}
-          aria-current={path === tab.href ? "page" : undefined}
+          aria-current={isCurrent(tab.href) ? "page" : undefined}
           className={cn(
             "rounded px-3 py-1.5 text-sm text-muted pointer-coarse:py-2.5",
-            path === tab.href && "bg-primary-soft font-medium text-primary",
+            isCurrent(tab.href) && "bg-primary-soft font-medium text-primary",
           )}
         >
           {tab.label}
@@ -54,7 +56,7 @@ export function ViewTabs() {
   );
 }
 
-function TileSheet({
+export function TileSheet({
   tile,
   onClose,
   canManage,
@@ -212,6 +214,7 @@ export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; c
     },
     { key: "active", header: t("cols.active"), value: (r) => (r.isActive ? "Yes" : "No"), defaultHidden: true },
     // Not the first column: the table wraps that one in a button, and a checkbox may not sit inside a button.
+    // `relative` lifts it above the phone card's click overlay.
     ...(canManage
       ? [
           {
@@ -225,7 +228,7 @@ export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; c
                 checked={picked.has(r.id)}
                 onClick={(e) => e.stopPropagation()}
                 onChange={() => toggle(r.id)}
-                className="size-5 accent-[var(--primary)]"
+                className="relative size-5 accent-[var(--primary)]"
               />
             ),
           },
@@ -302,6 +305,79 @@ export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; c
   );
 }
 
+/** One floor tile: short label, boxes used / capacity, coloured by how full it is. */
+export function TileButton({
+  tile,
+  label,
+  wide,
+  onOpen,
+}: {
+  tile: TileWithStock;
+  label: string;
+  wide?: boolean;
+  onOpen: (tile: TileWithStock) => void;
+}) {
+  const t = useTranslations("map");
+  const level = fillLevel(tile);
+  return (
+    <button
+      onClick={() => onOpen(tile)}
+      data-testid={`tile-${tile.code}`}
+      className={cn(
+        "relative flex min-h-14 min-w-12 flex-col items-start justify-between rounded-md border p-1.5 text-left transition-transform duration-150 hover:-translate-y-px hover:shadow-sm sm:min-h-16 sm:p-2",
+        FILL_CLS[level],
+        wide && "min-w-36",
+        !tile.isActive && "opacity-50",
+      )}
+    >
+      <span className="sr-only">
+        {`${tile.code}: ${t("boxesOf", { boxes: tile.boxes, capacity: tile.capacity ?? t("notSet") })} (${t(level)})`}
+      </span>
+      <span aria-hidden className="font-mono text-[10px] leading-none font-medium text-foreground sm:text-[11px]">
+        {label}
+      </span>
+      <span aria-hidden className="text-xs font-semibold tabular sm:text-sm">
+        {tile.capacity == null ? fmtNumber(tile.boxes) : `${tile.boxes}/${tile.capacity}`}
+      </span>
+      {capacityMissing(tile) && (
+        <span
+          aria-hidden
+          title={t("notSet")}
+          className="absolute top-1 right-1 grid size-4 place-items-center rounded-full bg-warning text-[10px] font-bold text-white"
+        >
+          ?
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** Colour key for the fill levels. */
+export function FillLegend() {
+  const t = useTranslations("map");
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-label={t("legend")}>
+      <span className="font-medium">{t("legend")}:</span>
+      {(["empty", "low", "mid", "full"] as const).map((l) => (
+        <span key={l} className="inline-flex items-center gap-1.5">
+          <span className={cn("size-4 rounded border", FILL_CLS[l])} aria-hidden />
+          {t(l)}
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1.5">
+        <span
+          aria-hidden
+          className="grid size-4 place-items-center rounded-full bg-warning text-[10px] font-bold text-white"
+        >
+          ?
+        </span>
+        {t("notSetHint")}
+      </span>
+      <span className="text-muted">{t("boxesHint")}</span>
+    </div>
+  );
+}
+
 export function FloorMap({ tiles, canManage }: { tiles: TileWithStock[]; canManage?: boolean }) {
   const t = useTranslations("map");
   const tl = useTranslations("locations");
@@ -313,62 +389,18 @@ export function FloorMap({ tiles, canManage }: { tiles: TileWithStock[]; canMana
   const onLevel = storage.filter((x) => x.level === level);
   const zones = [...new Set(onLevel.map((x) => x.zone))];
 
-  const Tile = ({ tile, wide }: { tile: TileWithStock; wide?: boolean }) => {
-    const level = fillLevel(tile);
-    return (
-      <button
-        onClick={() => setOpen(tile)}
-        data-testid={`tile-${tile.code}`}
-        className={cn(
-          "relative flex min-h-14 min-w-12 flex-col items-start justify-between rounded-md border p-1.5 text-left transition-transform duration-150 hover:-translate-y-px hover:shadow-sm sm:min-h-16 sm:p-2",
-          FILL_CLS[level],
-          wide && "min-w-36",
-          !tile.isActive && "opacity-50",
-        )}
-      >
-        <span className="sr-only">
-          {`${tile.code}: ${t("boxesOf", { boxes: tile.boxes, capacity: tile.capacity ?? t("notSet") })} (${t(level)})`}
-        </span>
-        <span aria-hidden className="font-mono text-[10px] leading-none font-medium text-foreground sm:text-[11px]">
-          {wide ? tile.code : `${rowLetter(tile.row)}-${String(tile.column).padStart(2, "0")}`}
-        </span>
-        <span aria-hidden className="text-xs font-semibold tabular sm:text-sm">
-          {tile.capacity == null ? fmtNumber(tile.boxes) : `${tile.boxes}/${tile.capacity}`}
-        </span>
-        {capacityMissing(tile) && (
-          <span
-            aria-hidden
-            title={t("notSet")}
-            className="absolute top-1 right-1 grid size-4 place-items-center rounded-full bg-warning text-[10px] font-bold text-white"
-          >
-            ?
-          </span>
-        )}
-      </button>
-    );
-  };
+  const Tile = ({ tile, wide }: { tile: TileWithStock; wide?: boolean }) => (
+    <TileButton
+      tile={tile}
+      label={wide ? tile.code : `${rowLetter(tile.row)}-${String(tile.column).padStart(2, "0")}`}
+      wide={wide}
+      onOpen={setOpen}
+    />
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-label={t("legend")}>
-        <span className="font-medium">{t("legend")}:</span>
-        {(["empty", "low", "mid", "full"] as const).map((l) => (
-          <span key={l} className="inline-flex items-center gap-1.5">
-            <span className={cn("size-4 rounded border", FILL_CLS[l])} aria-hidden />
-            {t(l)}
-          </span>
-        ))}
-        <span className="inline-flex items-center gap-1.5">
-          <span
-            aria-hidden
-            className="grid size-4 place-items-center rounded-full bg-warning text-[10px] font-bold text-white"
-          >
-            ?
-          </span>
-          {t("notSetHint")}
-        </span>
-        <span className="text-muted">{t("boxesHint")}</span>
-      </div>
+      <FillLegend />
 
       {levels.length > 1 && (
         <div

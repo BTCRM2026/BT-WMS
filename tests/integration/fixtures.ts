@@ -96,5 +96,6 @@ export async function createTenantRows(companyId: string, tag: string) {
     AlertEvent: (await prisma.alertEvent.create({ data: { companyId, kind: "test", key: tag, message: "fixture" } }))
       .id,
     Attachment: file.id,
+    Room: (await prisma.room.create({ data: { ...s, zone: `${company.code}Z`, name: `Room ${tag}` } })).id,
   } as Record<string, string>;
 }

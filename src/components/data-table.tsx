@@ -314,15 +314,21 @@ export function DataTable<T extends { id: string }>({
             {shown.map((r) => {
               const primary = visible.find((c) => c.primary) ?? visible[0];
               return (
-                <li key={r.id}>
-                  <div
-                    role={onRowClick ? "button" : undefined}
-                    tabIndex={onRowClick ? 0 : undefined}
-                    onClick={onRowClick && (() => onRowClick(r))}
-                    onKeyDown={onRowClick && ((e) => (e.key === "Enter" || e.key === " ") && onRowClick(r))}
-                    className={cn("block px-4 py-3", onRowClick && "active:bg-surface-2")}
-                  >
-                    <div className="font-medium">{primary.cell ? primary.cell(r) : primary.value(r)}</div>
+                <li key={r.id} className="relative">
+                  {/* The whole card is clickable through the title button's overlay; controls inside
+                      the card (e.g. a checkbox) sit above it, so no control is nested in another. */}
+                  <div className={cn("block px-4 py-3", onRowClick && "has-[>button:active]:bg-surface-2")}>
+                    {onRowClick ? (
+                      <button
+                        type="button"
+                        onClick={() => onRowClick(r)}
+                        className="block w-full text-left font-medium after:absolute after:inset-0"
+                      >
+                        {primary.cell ? primary.cell(r) : primary.value(r)}
+                      </button>
+                    ) : (
+                      <div className="font-medium">{primary.cell ? primary.cell(r) : primary.value(r)}</div>
+                    )}
                     <dl className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
                       {visible
                         .filter((c) => c !== primary)

@@ -15,6 +15,14 @@ BT - A - 03 - 1
 - Special areas live in the `…X` zone: `BTX-R-01-1` receiving, `BTX-D-01-1` dispatch,
   `BTX-X-01-1` damaged, `BTX-Q-01-1` quarantine, `BTX-RT-01-1` customer returns.
 
+## Rooms
+
+Each room of the warehouse is one zone with a name: **Locations → Rooms → New room**, e.g. code `BT1`,
+name "Room 1", where "Near the gate". Tap a room to go inside: you see only its rows, one line per row, and
+**Add row** creates the next row of tiles (row letter, how many tiles, boxes per tile, what it is used for).
+**Leave room** takes you back to the list. Put Receiving, Dispatch, Returns, Damaged and Quarantine as rows of
+the room near the gate (choose them under "Used for"). Phones open Rooms from the bottom bar.
+
 ## Marking the floor
 
 1. Generate the tiles once: **Locations → New tile → Generate tiles** (e.g. zone BT, rows A-F, columns 1-20,

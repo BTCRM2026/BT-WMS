@@ -35,6 +35,8 @@ approves **write-offs** and **cycle counts**. With **Put away now** (default) ea
 suggested tile(s), split by box capacity; edit or scan them and the good cartons go straight to the tiles
 when the receipt is posted. Untick it to leave everything for the putaway queue. Cartons that arrived
 damaged: **Inward receipts → Damaged on arrival → Write off damaged**.
+Sets up the floor in **Locations → Rooms**: add a room, go inside, **Add row** for each row of tiles,
+**Leave room** to go back (see [TILES.md](TILES.md)).
 
 ![Purchase orders](manual/manager-purchase-orders.png)
 ![Inward receipts](manual/manager-inward.png)

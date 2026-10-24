@@ -518,6 +518,46 @@ export async function setTileActive(ctx: Context, id: string, isActive: boolean)
   return { id };
 }
 
+// ------------------------------------------------------------------ rooms
+
+export const roomSchema = z.object({
+  zone: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{2,4}$/, "Room code: 2-4 letters/digits, e.g. BT1"),
+  name: z.string().trim().min(1, "Enter a name").max(60),
+  note: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .nullable()
+    .transform((v) => v || null),
+});
+
+/** Create a room, or rename an existing one. The room code (zone) cannot change once created. */
+export async function saveRoom(ctx: Context, input: { key?: string; id?: string; data: z.input<typeof roomSchema> }) {
+  const v = roomSchema.parse(input.data);
+  return once(ctx, input.key, "room.save", async (tx) => {
+    if (input.id) {
+      const before = await tx.room.findUnique({ where: { id: input.id } });
+      if (!before) throw new HttpError(404, "Room not found.");
+      const r = await tx.room.update({ where: { id: input.id }, data: { name: v.name, note: v.note } });
+      await audit({ ...ctx.auditMeta, action: "room.update", entity: "room", entityId: r.id, before, after: r }, tx);
+      return { id: r.id, zone: r.zone };
+    }
+    if (!zoneBelongsTo(v.zone, ctx.company.code))
+      throw new HttpError(400, `Room code must start with ${ctx.company.code}, e.g. ${ctx.company.code}1.`);
+    // Zones are unique per warehouse across companies: check globally for a clear message.
+    const taken = await prisma.room.findFirst({ where: { warehouseId: ctx.warehouseId!, zone: v.zone } });
+    if (taken) throw new HttpError(409, `Room ${v.zone} already exists.`);
+    const r = await tx.room.create({ data: { ...scopeOf(ctx), ...v } });
+    await audit({ ...ctx.auditMeta, action: "room.create", entity: "room", entityId: r.id, after: r }, tx);
+    return { id: r.id, zone: r.zone };
+  });
+}
+
 // ------------------------------------------------------------------ users
 
 const ROLES = ["ADMIN", "WAREHOUSE_MANAGER", "STORE_KEEPER", "BILLING", "VIEWER"] as const;

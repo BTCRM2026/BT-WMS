@@ -7,6 +7,7 @@ const SCREENS = [
   { path: "/products", title: "Products" },
   { path: "/locations", title: "Locations / Tiles" },
   { path: "/locations/map", title: "Warehouse floor map" },
+  { path: "/locations/rooms", title: "Rooms" },
   { path: "/stock", title: "Stock" },
   { path: "/scan", title: "Scan" },
   { path: "/search?q=shampoo", title: "Search" },

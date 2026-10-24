@@ -8,6 +8,8 @@ const SCREENS = [
   "/products",
   "/locations",
   "/locations/map",
+  "/locations/rooms",
+  "/locations/rooms/BT",
   "/stock",
   "/scan",
   "/search?q=bt",
