@@ -96,6 +96,22 @@ export default async function Dashboard() {
         subtitle={t("subtitle")}
       />
 
+      {d.staleReceiving.lines > 0 && (
+        <Link
+          href="/inward/putaway"
+          data-testid="stale-receiving"
+          className="mb-4 flex items-start gap-3 rounded-lg border border-warning/50 bg-warning-soft p-4 text-sm text-warning hover:border-warning"
+        >
+          <AlertTriangle className="mt-0.5 size-5 shrink-0" aria-hidden />
+          <span>
+            <span className="font-semibold">{t("stale.title", { hours: d.staleReceiving.hours })}</span>
+            <span className="block text-foreground">
+              {t("stale.body", { units: fmtNumber(d.staleReceiving.units), lines: d.staleReceiving.lines })}
+            </span>
+          </span>
+        </Link>
+      )}
+
       <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-5">
         {kpis.map((k) => {
           const body = (

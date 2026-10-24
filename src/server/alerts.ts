@@ -6,7 +6,7 @@ import { lowStock, stockByBatch } from "@/server/insights";
 
 const DAY = 86_400_000;
 export const EXPIRY_THRESHOLDS = [90, 60, 30] as const;
-const PENDING_HOURS = { putaway: 24, pick: 24, writeOff: 48, count: 48 };
+const PENDING_HOURS = { pick: 24, writeOff: 48, count: 48 };
 
 type Candidate = { kind: string; key: string; message: string };
 
@@ -40,12 +40,14 @@ export async function candidates(db: TenantDb, now = new Date()): Promise<Candid
   }
 
   const ago = (h: number) => new Date(now.getTime() - h * 3600_000);
+  // Same threshold as the dashboard warning (Company settings, default 4 h).
+  const putawayHours = (await db.companySetting.findFirst())?.receivingAlertHours ?? 4;
   const [putaways, picks, writeOffs, counts] = await Promise.all([
     db.inwardReceiptLine.findMany({
       where: {
         putawayAt: null,
         quantity: { gt: 0 },
-        inwardReceipt: { receivedAt: { lt: ago(PENDING_HOURS.putaway) } },
+        inwardReceipt: { receivedAt: { lt: ago(putawayHours) } },
       },
       include: { product: { select: { sku: true } } },
     }),
@@ -59,7 +61,7 @@ export async function candidates(db: TenantDb, now = new Date()): Promise<Candid
     out.push({
       kind: "pending-putaway",
       key: l.id,
-      message: `${l.quantity} × ${l.product.sku} waiting for putaway for over ${PENDING_HOURS.putaway} h`,
+      message: `${l.quantity - l.putawayQuantity} × ${l.product.sku} waiting for putaway for over ${putawayHours} h`,
     });
   for (const p of picks)
     out.push({

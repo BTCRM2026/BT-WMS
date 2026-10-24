@@ -115,6 +115,7 @@ model Company {
   products       Product[]
   batches        Batch[]
   locations      Location[]
+  rooms          Room[]
   movements      StockMovement[]
   purchaseOrders PurchaseOrder[]
   inwardReceipts InwardReceipt[]
@@ -141,6 +142,7 @@ model Warehouse {
   products       Product[]
   batches        Batch[]
   locations      Location[]
+  rooms          Room[]
   movements      StockMovement[]
   purchaseOrders PurchaseOrder[]
   inwardReceipts InwardReceipt[]
@@ -256,6 +258,8 @@ model Product {
   maxStock          Int?     @map("max_stock")
   expiryTracked     Boolean  @default(false) @map("expiry_tracked")
   defaultLocationId String?  @map("default_location_id")
+  /// Big cartons: at most this many boxes of this product fit on one tile (null = tile capacity only).
+  maxBoxesPerTile   Int?     @map("max_boxes_per_tile")
   mrp               Decimal  @default(0) @db.Decimal(12, 2)
   purchasePrice     Decimal  @default(0) @map("purchase_price") @db.Decimal(12, 2)
   isActive          Boolean  @default(true) @map("is_active")
@@ -325,6 +329,7 @@ model Location {
   column      Int
   level       Int          @default(0)
   type        LocationType @default(STORAGE)
+  /// How many boxes (cartons) fit on this tile; null = not set (unlimited).
   capacity    Int?
   isActive    Boolean      @default(true) @map("is_active")
   createdAt   DateTime     @default(now()) @map("created_at")
@@ -345,6 +350,26 @@ model Location {
   @@unique([warehouseId, code])
   @@index([companyId, zone])
   @@map("locations")
+}
+
+/// A room of the warehouse. Its tiles are the locations whose zone equals `zone`, e.g. BT1.
+model Room {
+  id          String   @id @default(cuid())
+  companyId   String   @map("company_id")
+  warehouseId String   @map("warehouse_id")
+  zone        String
+  name        String
+  /// Where it is, e.g. "Near the gate" or "1st floor".
+  note        String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  company   Company   @relation(fields: [companyId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([id, companyId])
+  @@unique([warehouseId, zone])
+  @@index([companyId])
+  @@map("rooms")
 }
 
 // ---------------------------------------------------------------------------
@@ -479,6 +504,8 @@ model InwardReceiptLine {
   expectedQuantity  Int?      @map("expected_quantity")
   damagedQuantity   Int       @default(0) @map("damaged_quantity")
   shortQuantity     Int       @default(0) @map("short_quantity")
+  /// Good units already moved to storage tiles; the line leaves the queue when this reaches quantity.
+  putawayQuantity   Int       @default(0) @map("putaway_quantity")
   putawayLocationId String?   @map("putaway_location_id")
   putawayAt         DateTime? @map("putaway_at")
   putawayById       String?   @map("putaway_by_id")
@@ -656,22 +683,24 @@ model StockReturn {
 }
 
 model Damage {
-  id           String         @id @default(cuid())
-  companyId    String         @map("company_id")
-  warehouseId  String         @map("warehouse_id")
-  damageNumber String         @map("damage_number")
-  productId    String         @map("product_id")
-  batchId      String?        @map("batch_id")
-  locationId   String         @map("location_id")
-  quantity     Int
-  reason       String
-  kind         WriteOffKind   @default(DAMAGE)
-  status       DocumentStatus @default(DRAFT)
-  reportedById String         @map("reported_by_id")
-  approvedById String?        @map("approved_by_id")
-  approvedAt   DateTime?      @map("approved_at")
-  returnId     String?        @map("return_id")
-  createdAt    DateTime       @default(now()) @map("created_at")
+  id            String         @id @default(cuid())
+  companyId     String         @map("company_id")
+  warehouseId   String         @map("warehouse_id")
+  damageNumber  String         @map("damage_number")
+  productId     String         @map("product_id")
+  batchId       String?        @map("batch_id")
+  locationId    String         @map("location_id")
+  quantity      Int
+  reason        String
+  kind          WriteOffKind   @default(DAMAGE)
+  status        DocumentStatus @default(DRAFT)
+  reportedById  String         @map("reported_by_id")
+  approvedById  String?        @map("approved_by_id")
+  approvedAt    DateTime?      @map("approved_at")
+  returnId      String?        @map("return_id")
+  /// Damaged-on-arrival write-off: the receipt line it came from (its photos are on the receipt).
+  receiptLineId String?        @map("receipt_line_id")
+  createdAt     DateTime       @default(now()) @map("created_at")
 
   company   Company   @relation(fields: [companyId], references: [id])
   warehouse Warehouse @relation(fields: [warehouseId], references: [id])
@@ -680,6 +709,7 @@ model Damage {
   location  Location  @relation(fields: [locationId, companyId], references: [id, companyId])
 
   @@unique([companyId, damageNumber])
+  @@index([companyId, receiptLineId])
   @@map("damages")
 }
 
@@ -794,17 +824,19 @@ model Attachment {
 
 /// Owner controls per company.
 model CompanySetting {
-  id               String    @id @default(cuid())
-  companyId        String    @unique @map("company_id")
+  id                  String    @id @default(cuid())
+  companyId           String    @unique @map("company_id")
   /// Write-offs (damage/expiry) need a manager's approval before stock moves.
-  writeOffApproval Boolean   @default(true) @map("write_off_approval")
+  writeOffApproval    Boolean   @default(true) @map("write_off_approval")
   /// Cycle-count variances need a manager's approval before adjusting stock.
-  countApproval    Boolean   @default(true) @map("count_approval")
+  countApproval       Boolean   @default(true) @map("count_approval")
   /// Soft lock: nothing dated before this may be reversed or cancelled.
-  lockedBefore     DateTime? @map("locked_before")
+  lockedBefore        DateTime? @map("locked_before")
   /// Comma-separated emails / phone numbers for the daily digest.
-  digestRecipients String?   @map("digest_recipients")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
+  digestRecipients    String?   @map("digest_recipients")
+  /// Warn when goods sit on the RECEIVING tile longer than this many hours.
+  receivingAlertHours Int       @default(4) @map("receiving_alert_hours")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   @@map("company_settings")
 }

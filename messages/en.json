@@ -73,7 +73,8 @@
     "openMenu": "Open menu",
     "mainNav": "Main navigation",
     "breadcrumb": "Breadcrumb",
-    "home": "Home"
+    "home": "Home",
+    "rooms": "Rooms"
   },
   "topbar": {
     "searchPlaceholder": "Search products, tiles, batches, orders…",
@@ -148,6 +149,10 @@
       "stock": "Check stock",
       "map": "Open floor map",
       "products": "Browse products"
+    },
+    "stale": {
+      "title": "Goods on the receiving tile for over {hours} h",
+      "body": "{units} units on {lines} receipt line(s) are not pickable yet. Put them away."
     }
   },
   "products": {
@@ -182,8 +187,10 @@
       "type": "Type",
       "fill": "Fill",
       "units": "Units",
-      "capacity": "Capacity",
-      "active": "Active"
+      "capacity": "Capacity (boxes)",
+      "active": "Active",
+      "pick": "Select",
+      "boxes": "Boxes"
     },
     "types": {
       "STORAGE": "Storage",
@@ -196,11 +203,15 @@
     "searchPlaceholder": "Search tile code",
     "empty": "No tiles match these filters.",
     "viewTable": "Table",
-    "viewMap": "Floor map"
+    "viewMap": "Floor map",
+    "notSet": "Not set",
+    "picked": "{count} selected",
+    "pickTile": "Select {code}",
+    "viewRooms": "Rooms"
   },
   "map": {
     "title": "Warehouse floor map",
-    "subtitle": "Each square is a floor tile. Colour shows how full it is.",
+    "subtitle": "Each square is a floor tile. It shows boxes used / capacity; colour shows how full it is.",
     "legend": "Fill level",
     "empty": "Empty",
     "low": "Under 50%",
@@ -212,11 +223,15 @@
     "levelN": "Level {level}",
     "tileStock": "Stock on {code}",
     "tileEmpty": "Nothing is stored on this tile.",
-    "tileSummary": "{units} units · {capacity} capacity",
+    "tileSummary": "{boxes} boxes ({units} units) · capacity: {capacity}",
     "product": "Product",
     "batch": "Batch",
     "expiry": "Expiry",
-    "qty": "Qty"
+    "qty": "Qty",
+    "notSet": "not set",
+    "notSetHint": "Capacity not set",
+    "boxesHint": "Numbers are boxes used / capacity.",
+    "boxesOf": "{boxes} of {capacity} boxes"
   },
   "stock": {
     "title": "Stock",
@@ -299,5 +314,39 @@
     "offline": "You're offline. Changes can't be saved until the connection is back.",
     "reconnecting": "Connection to the server was lost. Reconnecting…",
     "reconnected": "Connection restored."
+  },
+  "rooms": {
+    "title": "Rooms",
+    "subtitle": "Tap a room to see its rows and tiles.",
+    "newRoom": "New room",
+    "editRoom": "Edit room",
+    "nameRoom": "Name this room",
+    "code": "Room code",
+    "codeHint": "2-4 letters/digits starting with {company}, e.g. {company}1. Tile codes in this room start with it. It cannot be changed later.",
+    "name": "Name",
+    "namePlaceholder": "Room 1",
+    "note": "Where is it? (optional)",
+    "notePlaceholder": "Near the gate, 1st floor ...",
+    "saved": "Room saved",
+    "empty": "No rooms yet",
+    "emptyBody": "Add your first room, then add rows of tiles inside it.",
+    "tiles": "{count, plural, =0 {No tiles} one {# tile} other {# tiles}}",
+    "usedFree": "{used} in use · {free} free",
+    "fullTiles": "{count} full",
+    "boxes": "{boxes} boxes",
+    "boxesOf": "{boxes} of {capacity} boxes",
+    "leave": "Leave room",
+    "breadcrumb": "Rooms",
+    "row": "Row {row}",
+    "rowTiles": "{count, plural, one {# tile} other {# tiles}}",
+    "noTiles": "No tiles in this room yet",
+    "noTilesBody": "Use \"Add row\" to create the first row of tiles.",
+    "addRow": "Add row",
+    "rowLetter": "Row letter",
+    "rowLetterHint": "Rows go A, B, C … from the door.",
+    "spots": "Tiles in this row",
+    "capacity": "Boxes per tile (optional)",
+    "type": "Used for",
+    "willCreate": "{count, plural, one {Creates # tile} other {Creates # tiles}}: {first} … {last}"
   }
 }

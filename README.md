@@ -96,6 +96,7 @@ tests/unit         tests/integration         e2e/
 ## Documentation
 
 - [Architecture and database diagram](docs/ARCHITECTURE.md)
+- [Complete guide: every module, step by step, with warehouse scenarios](docs/WMS-GUIDE.md)
 - [User manual with screenshots per role](docs/USER-MANUAL.md)
 - [Tile numbering and slotting guide](docs/TILES.md)
 - [Operations runbook: environments, env vars, deploy, migrations, rollback, backups](docs/RUNBOOK.md)

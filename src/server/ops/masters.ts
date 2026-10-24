@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { z } from "zod";
-import type { LocationType, Role } from "@prisma/client";
+import type { LocationType, Prisma, Role } from "@prisma/client";
 import { HttpError, type Context } from "@/server/auth/context";
 import { audit } from "@/server/audit";
 import { prisma } from "@/server/db/client";
@@ -29,6 +29,8 @@ export const productSchema = z
       .or(z.literal("").transform(() => null)),
     minStock: z.coerce.number().int("Whole number").min(0).max(10_000_000).default(0),
     maxStock: z.coerce.number().int("Whole number").min(0).max(10_000_000).optional().nullable(),
+    /** Big cartons: at most this many boxes of the product fit on one tile. */
+    maxBoxesPerTile: z.coerce.number().int("Whole number").min(1, "At least 1").max(100_000).optional().nullable(),
     expiryTracked: z.coerce.boolean().default(false),
     defaultTileCode: z
       .string()
@@ -66,6 +68,7 @@ export async function saveProduct(
     barcode: v.barcode ?? null,
     minStock: v.minStock,
     maxStock: v.maxStock ?? null,
+    maxBoxesPerTile: v.maxBoxesPerTile ?? null,
     expiryTracked: v.expiryTracked,
     defaultLocationId,
     mrp: v.mrp,
@@ -124,6 +127,7 @@ export const IMPORT_COLUMNS = [
   "barcode",
   "min_stock",
   "max_stock",
+  "max_boxes_per_tile",
   "expiry_tracked",
   "default_tile",
   "mrp",
@@ -241,6 +245,7 @@ export async function importProducts(ctx: Context, file: { name: string; bytes: 
       barcode: raw.barcode || null,
       minStock: raw.min_stock || undefined,
       maxStock: raw.max_stock || null,
+      maxBoxesPerTile: raw.max_boxes_per_tile || null,
       expiryTracked: raw.expiry_tracked ? yesNo(raw.expiry_tracked) : undefined,
       defaultTileCode: raw.default_tile || null,
       mrp: raw.mrp || undefined,
@@ -296,6 +301,7 @@ export async function importProducts(ctx: Context, file: { name: string; bytes: 
           barcode: d.barcode ?? null,
           minStock: d.minStock,
           maxStock: d.maxStock ?? null,
+          maxBoxesPerTile: d.maxBoxesPerTile ?? null,
           expiryTracked: d.expiryTracked,
           defaultLocationId: d.defaultTileCode ? tileByCode.get(d.defaultTileCode)! : null,
           mrp: d.mrp,
@@ -319,10 +325,13 @@ export async function importProducts(ctx: Context, file: { name: string; bytes: 
 
 const TYPES = ["STORAGE", "RECEIVING", "DISPATCH", "DAMAGED", "QUARANTINE", "RETURN"] as const;
 
+/** Boxes (cartons) that fit on a tile; empty = not set (unlimited). */
+const boxes = z.coerce.number().int("Whole number").min(1, "At least 1 box").max(100_000);
+
 export const tileSchema = z.object({
   code: z.string().trim().toUpperCase(),
   type: z.enum(TYPES).default("STORAGE"),
-  capacity: z.coerce.number().int().min(1).max(1_000_000).optional().nullable(),
+  capacity: boxes.optional().nullable(),
 });
 
 export async function saveTile(ctx: Context, input: { key?: string; id?: string; data: z.input<typeof tileSchema> }) {
@@ -377,7 +386,9 @@ export const bulkTilesSchema = z.object({
   levelFrom: z.coerce.number().int().min(1).max(99).default(1),
   levelTo: z.coerce.number().int().min(1).max(99).default(1),
   type: z.enum(TYPES).default("STORAGE"),
-  capacity: z.coerce.number().int().min(1).max(1_000_000).optional().nullable(),
+  capacity: boxes.optional().nullable(),
+  /** Capacity per level, e.g. { "1": 3, "2": 5, "3": 5 }; falls back to `capacity`. */
+  levelCapacity: z.record(z.string(), boxes.nullable()).optional(),
 });
 
 /** Bulk-generate tiles, e.g. zone BT, rows A-F, columns 1-20, levels 1-3 = 360 tiles. Existing codes are skipped. */
@@ -418,7 +429,7 @@ export async function generateTiles(ctx: Context, input: z.input<typeof bulkTile
         column: c.column,
         level: c.level,
         type: v.type,
-        capacity: v.capacity ?? null,
+        capacity: v.levelCapacity?.[String(c.level)] ?? v.capacity ?? null,
       })),
     });
     await audit(
@@ -431,6 +442,62 @@ export async function generateTiles(ctx: Context, input: z.input<typeof bulkTile
       tx,
     );
     return { created: fresh.length, skipped: taken.size };
+  });
+}
+
+export const capacitySchema = z
+  .object({
+    key: z.string().max(64).optional(),
+    /** Boxes per tile; null clears it (unlimited). */
+    capacity: boxes.nullable(),
+    /** Tiles picked in the table... */
+    ids: z.array(z.string().min(1)).min(1).max(5000).optional(),
+    /** ...or a range: zone + rows (A-F) + columns + levels. */
+    zone: z.string().trim().toUpperCase().optional(),
+    rows: z.string().trim().optional(),
+    columnFrom: z.coerce.number().int().min(1).max(99).optional(),
+    columnTo: z.coerce.number().int().min(1).max(99).optional(),
+    levelFrom: z.coerce.number().int().min(0).max(99).optional(),
+    levelTo: z.coerce.number().int().min(0).max(99).optional(),
+  })
+  .refine((v) => v.ids || v.zone, { message: "Choose tiles or a zone", path: ["zone"] });
+
+/** Set the box capacity of many tiles at once (this company's tiles only), audited. */
+export async function setCapacity(ctx: Context, input: z.input<typeof capacitySchema>) {
+  const v = capacitySchema.parse(input);
+  let where: Prisma.LocationWhereInput;
+  if (v.ids) where = { id: { in: v.ids } };
+  else {
+    if (!zoneBelongsTo(v.zone!, ctx.company.code))
+      throw new HttpError(400, `Zone must start with ${ctx.company.code}.`);
+    let rows: number[] | undefined;
+    try {
+      rows = v.rows ? expandRows(v.rows).map(rowNumber) : undefined;
+    } catch (e) {
+      throw new HttpError(400, (e as Error).message);
+    }
+    where = {
+      zone: v.zone,
+      ...(rows ? { row: { in: rows } } : {}),
+      column: { gte: v.columnFrom ?? 0, lte: v.columnTo ?? 99 },
+      level: { gte: v.levelFrom ?? 0, lte: v.levelTo ?? 99 },
+    };
+  }
+  return once(ctx, v.key, "tile.capacity", async (tx) => {
+    const tiles = await tx.location.findMany({ where, select: { id: true, code: true, capacity: true } });
+    if (!tiles.length) throw new HttpError(404, "No tiles match.");
+    await tx.location.updateMany({ where: { id: { in: tiles.map((t) => t.id) } }, data: { capacity: v.capacity } });
+    await audit(
+      {
+        ...ctx.auditMeta,
+        action: "tile.capacity",
+        entity: "location",
+        before: tiles.map(({ code, capacity }) => ({ code, capacity })),
+        after: { ...v, ids: undefined, updated: tiles.length },
+      },
+      tx,
+    );
+    return { updated: tiles.length };
   });
 }
 
@@ -449,6 +516,46 @@ export async function setTileActive(ctx: Context, id: string, isActive: boolean)
     before,
   });
   return { id };
+}
+
+// ------------------------------------------------------------------ rooms
+
+export const roomSchema = z.object({
+  zone: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{2,4}$/, "Room code: 2-4 letters/digits, e.g. BT1"),
+  name: z.string().trim().min(1, "Enter a name").max(60),
+  note: z
+    .string()
+    .trim()
+    .max(120)
+    .optional()
+    .nullable()
+    .transform((v) => v || null),
+});
+
+/** Create a room, or rename an existing one. The room code (zone) cannot change once created. */
+export async function saveRoom(ctx: Context, input: { key?: string; id?: string; data: z.input<typeof roomSchema> }) {
+  const v = roomSchema.parse(input.data);
+  return once(ctx, input.key, "room.save", async (tx) => {
+    if (input.id) {
+      const before = await tx.room.findUnique({ where: { id: input.id } });
+      if (!before) throw new HttpError(404, "Room not found.");
+      const r = await tx.room.update({ where: { id: input.id }, data: { name: v.name, note: v.note } });
+      await audit({ ...ctx.auditMeta, action: "room.update", entity: "room", entityId: r.id, before, after: r }, tx);
+      return { id: r.id, zone: r.zone };
+    }
+    if (!zoneBelongsTo(v.zone, ctx.company.code))
+      throw new HttpError(400, `Room code must start with ${ctx.company.code}, e.g. ${ctx.company.code}1.`);
+    // Zones are unique per warehouse across companies: check globally for a clear message.
+    const taken = await prisma.room.findFirst({ where: { warehouseId: ctx.warehouseId!, zone: v.zone } });
+    if (taken) throw new HttpError(409, `Room ${v.zone} already exists.`);
+    const r = await tx.room.create({ data: { ...scopeOf(ctx), ...v } });
+    await audit({ ...ctx.auditMeta, action: "room.create", entity: "room", entityId: r.id, after: r }, tx);
+    return { id: r.id, zone: r.zone };
+  });
 }
 
 // ------------------------------------------------------------------ users

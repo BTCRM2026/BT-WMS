@@ -71,7 +71,9 @@
       "groupPrice": "Prices",
       "import": "Import",
       "active": "Active",
-      "inactive": "Inactive"
+      "inactive": "Inactive",
+      "maxBoxesPerTile": "Max boxes per tile",
+      "maxBoxesPerTileHint": "For big cartons: at most this many boxes on one tile. Empty = the tile's capacity."
     },
     "import": {
       "title": "Import products",
@@ -95,7 +97,7 @@
       "code": "Tile code",
       "codeHint": "Zone-Row-Column-Level, e.g. {example}. The zone must start with {company}.",
       "type": "Type",
-      "capacity": "Capacity (units)",
+      "capacity": "Capacity (boxes)",
       "generate": "Bulk generate",
       "generateTitle": "Generate tiles",
       "generateHint": "Creates every combination; existing codes are skipped.",
@@ -108,7 +110,10 @@
       "willCreate": "{count} tiles: {first} … {last}",
       "created": "{created} created, {skipped} already existed",
       "print": "Print tile map",
-      "printTitle": "Tile map: {company}"
+      "printTitle": "Tile map: {company}",
+      "capacityAll": "Capacity (boxes, all levels)",
+      "capacityPerLevel": "Capacity per level (boxes)",
+      "levelBoxes": "Level {level}"
     },
     "users": {
       "title": "Users",
@@ -151,12 +156,23 @@
       "posted": "Receipt {number} posted",
       "putaway": "Putaway",
       "putawayTitle": "Putaway",
-      "putawaySubtitle": "Scan or type the tile you put each item on. Stock is available only after this.",
+      "putawaySubtitle": "Goods still on the receiving tile. Check the suggested tile(s), scan or change them, confirm. Stock is pickable only after this.",
       "suggested": "Suggested tile",
       "useSuggested": "Use {code}",
       "noSuggestion": "No free tile found: choose one",
       "putawayDone": "{qty} units put away on {tile}",
-      "queueEmpty": "Nothing waiting for putaway."
+      "queueEmpty": "Nothing waiting for putaway.",
+      "putNow": "Put away now",
+      "putNowHint": "Good cartons go straight onto the tiles below when you post. Untick to leave everything on the receiving tile for the putaway queue.",
+      "putOn": "Put on tile(s)",
+      "addTile": "Add tile",
+      "tooMany": "Tiles add up to {placed}, more than the {good} good units",
+      "restWaits": "{placed} of {good} placed; {rest} wait in the putaway queue",
+      "allPlaced": "All {good} placed",
+      "writeOffDamaged": "Write off damaged",
+      "damagedTitle": "Damaged on arrival",
+      "damagedHint": "Cartons on the damaged tile that are not written off yet.",
+      "photoN": "Photo {n}"
     },
     "so": {
       "title": "Sales orders",
@@ -273,6 +289,13 @@
       "filterTile": "Tile code",
       "apply": "Show",
       "open": "Ledger"
+    },
+    "capacity": {
+      "title": "Set capacity",
+      "subtitle": "Set how many boxes fit on many tiles at once: pick a zone, rows, columns and levels.",
+      "apply": "Set capacity",
+      "done": "{count} tiles updated",
+      "emptyClears": "Boxes per tile. Leave empty to clear it (unlimited)."
     }
   },
   "reports": {
@@ -332,7 +355,9 @@
     "saved": "Settings saved",
     "exportTitle": "Export all data",
     "exportHint": "Download every table for this company as an Excel workbook.",
-    "exportButton": "Download export"
+    "exportButton": "Download export",
+    "receivingAlertHours": "Warn about goods on the receiving tile after (hours)",
+    "receivingAlertHoursHint": "The dashboard and the daily digest flag goods not put away within this time."
   },
   "auditlog": {
     "title": "Audit log",

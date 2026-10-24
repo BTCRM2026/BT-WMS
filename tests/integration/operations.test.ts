@@ -116,7 +116,7 @@ describe("full cycle: inward -> putaway -> order -> pick -> dispatch", () => {
 
   it("suggests the default tile and refuses another company's zone", async () => {
     const line = (await putawayQueue(ctx)).find((l) => l.productId === productId)!;
-    expect((await suggestFor(ctx, line.id))?.code).toBe("BT-D-10-1");
+    expect((await suggestFor(ctx, line.id))[0]).toEqual({ tileCode: "BT-D-10-1", quantity: 90 });
     await expect(confirmPutaway(ctx, { lineId: line.id, tileCode: "RF-A-01-1" })).rejects.toThrow(
       /not in a Bond Therapy zone/,
     );

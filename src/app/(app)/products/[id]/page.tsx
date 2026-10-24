@@ -32,6 +32,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           barcode: p?.barcode ?? "",
           minStock: p?.minStock ?? 0,
           maxStock: p?.maxStock ?? "",
+          maxBoxesPerTile: p?.maxBoxesPerTile ?? "",
           expiryTracked: p?.expiryTracked ?? true,
           defaultTileCode: p?.defaultLocation?.code ?? "",
           mrp: p ? Number(p.mrp) : 0,

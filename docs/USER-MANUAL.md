@@ -8,7 +8,8 @@ Every code field (tile, product, batch) has a camera button; USB scanners work i
 
 Switch company with the building button in the top bar. **Owner view** compares both companies.
 **Reports** has 13 reports with date filters and Excel / PDF export. **Company settings** holds
-approval rules, the period lock, digest recipients and the full data export.
+approval rules, the period lock, the receiving warning time (hours, default 4), digest recipients and the
+full data export.
 
 ![Owner dashboard](manual/owner-dashboard.png)
 ![Owner view](manual/owner-owner.png)
@@ -18,7 +19,8 @@ approval rules, the period lock, digest recipients and the full data export.
 ## Admin
 
 Manages **Users** (create, change role, reset password, deactivate), **Products** (edit, import from
-Excel/CSV with a row-by-row check), **Tiles** (create, bulk-generate, print, deactivate) and reads
+Excel/CSV with a row-by-row check; optional **Max boxes per tile** for big cartons), **Tiles** (create,
+bulk-generate with a capacity in boxes per level, **Set capacity** in bulk, print, deactivate) and reads
 the **Audit log**.
 
 ![Users](manual/admin-users.png)
@@ -29,7 +31,12 @@ the **Audit log**.
 ## Warehouse manager
 
 Creates **purchase orders**, records **receipts** (good, damaged, short, batch, expiry, photos),
-approves **write-offs** and **cycle counts**.
+approves **write-offs** and **cycle counts**. With **Put away now** (default) each receipt line shows the
+suggested tile(s), split by box capacity; edit or scan them and the good cartons go straight to the tiles
+when the receipt is posted. Untick it to leave everything for the putaway queue. Cartons that arrived
+damaged: **Inward receipts → Damaged on arrival → Write off damaged**.
+Sets up the floor in **Locations → Rooms**: add a room, go inside, **Add row** for each row of tiles,
+**Leave room** to go back (see [TILES.md](TILES.md)).
 
 ![Purchase orders](manual/manager-purchase-orders.png)
 ![Inward receipts](manual/manager-inward.png)
@@ -38,7 +45,9 @@ approves **write-offs** and **cycle counts**.
 
 ## Store keeper (phone)
 
-1. **Putaway**: tap the suggested tile (or scan the tile you used) and Confirm. Stock becomes pickable.
+1. **Putaway**: the suggested tile(s) and quantities are filled in (split over tiles when one is not
+   enough). Scan the tile you actually used if different, fix the quantity, Confirm. Stock becomes
+   pickable; anything you did not place stays in the queue.
 2. **Pick lists**: walk the route top to bottom, scan each tile, confirm the quantity. Fewer than asked?
    Enter what you picked and a reason.
 3. Pack, then **Confirm dispatch** with vehicle and LR numbers; print the challan.

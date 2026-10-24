@@ -21,6 +21,7 @@ export default async function CompanySettingsPage() {
             countApproval: s.countApproval,
             lockedBefore: s.lockedBefore ? s.lockedBefore.toISOString().slice(0, 10) : "",
             digestRecipients: s.digestRecipients ?? "",
+            receivingAlertHours: s.receivingAlertHours,
           }}
         />
         <Card className="p-4 sm:p-5">

@@ -15,6 +15,7 @@ type Values = {
   barcode: string;
   minStock: number | string;
   maxStock: number | string;
+  maxBoxesPerTile: number | string;
   expiryTracked: boolean;
   defaultTileCode: string;
   mrp: number | string;
@@ -54,7 +55,14 @@ export function ProductForm({
         e.preventDefault();
         run(
           saveProductAction,
-          { id, data: { ...v, maxStock: v.maxStock === "" ? null : v.maxStock } },
+          {
+            id,
+            data: {
+              ...v,
+              maxStock: v.maxStock === "" ? null : v.maxStock,
+              maxBoxesPerTile: v.maxBoxesPerTile === "" ? null : v.maxBoxesPerTile,
+            },
+          },
           {
             success: t("saved"),
             then: (d) => {
@@ -84,6 +92,12 @@ export function ProductForm({
         <h2 className="font-semibold sm:col-span-2">{t("prod.groupStock")}</h2>
         {field("minStock", t("prod.minStock"), { type: "number", min: 0, inputMode: "numeric" })}
         {field("maxStock", t("prod.maxStock"), { type: "number", min: 0, inputMode: "numeric" })}
+        {field(
+          "maxBoxesPerTile",
+          t("prod.maxBoxesPerTile"),
+          { type: "number", min: 1, inputMode: "numeric" },
+          t("prod.maxBoxesPerTileHint"),
+        )}
         <Field label={t("prod.defaultTile")} htmlFor="defaultTileCode">
           <select
             id="defaultTileCode"

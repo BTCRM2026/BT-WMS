@@ -18,7 +18,7 @@ export function TileForms({ companyCode }: { companyCode: string }) {
   const to = useTranslations("ops");
   const one = useSubmit();
   const bulk = useSubmit();
-  const [single, setSingle] = useState({ code: "", type: "STORAGE" as TileType, capacity: "200" });
+  const [single, setSingle] = useState({ code: "", type: "STORAGE" as TileType, capacity: "" });
   const [g, setG] = useState({
     zone: companyCode,
     rows: "A-F",
@@ -27,8 +27,12 @@ export function TileForms({ companyCode }: { companyCode: string }) {
     levelFrom: "1",
     levelTo: "3",
     type: "STORAGE" as TileType,
-    capacity: "200",
+    capacity: "",
   });
+  // Boxes per level, e.g. level 1 = 3, level 2 = 5, level 3 = 5 (empty = use "all levels").
+  const [perLevel, setPerLevel] = useState<Record<string, string>>({});
+  const levels: number[] = [];
+  for (let l = Number(g.levelFrom); l <= Number(g.levelTo) && levels.length < 20; l++) levels.push(l);
 
   let preview = "";
   try {
@@ -109,7 +113,13 @@ export function TileForms({ companyCode }: { companyCode: string }) {
             e.preventDefault();
             bulk.run(
               generateTilesAction,
-              { ...g, capacity: g.capacity || null },
+              {
+                ...g,
+                capacity: g.capacity || null,
+                levelCapacity: Object.fromEntries(
+                  levels.filter((l) => perLevel[l]).map((l) => [String(l), Number(perLevel[l])]),
+                ),
+              },
               { success: (d) => t("created", d as { created: number; skipped: number }) },
             );
           }}
@@ -176,7 +186,7 @@ export function TileForms({ companyCode }: { companyCode: string }) {
             <Field label={t("type")} htmlFor="gtype">
               {typeSelect(g.type, (v) => setG({ ...g, type: v }), "gtype")}
             </Field>
-            <Field label={t("capacity")} htmlFor="gcap">
+            <Field label={t("capacityAll")} htmlFor="gcap">
               <Input
                 id="gcap"
                 type="number"
@@ -186,6 +196,26 @@ export function TileForms({ companyCode }: { companyCode: string }) {
               />
             </Field>
           </div>
+          {levels.length > 1 && (
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">{t("capacityPerLevel")}</legend>
+              <div className="grid grid-cols-3 gap-3">
+                {levels.map((l) => (
+                  <Field key={l} label={t("levelBoxes", { level: l })} htmlFor={`lc-${l}`}>
+                    <Input
+                      id={`lc-${l}`}
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      placeholder={g.capacity}
+                      value={perLevel[l] ?? ""}
+                      onChange={(e) => setPerLevel({ ...perLevel, [l]: e.target.value })}
+                    />
+                  </Field>
+                ))}
+              </div>
+            </fieldset>
+          )}
           {preview && (
             <p className="text-sm text-muted" aria-live="polite">
               {preview}
