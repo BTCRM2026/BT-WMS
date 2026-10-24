@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { HttpError, type Context } from "@/server/auth/context";
 import { audit } from "@/server/audit";
-import { suggestPutaway } from "@/lib/putaway";
+import type { InwardReceiptLine } from "@prisma/client";
+import { roomFor, splitPutaway, tileBook } from "@/lib/putaway";
 import { lockKeys } from "@/server/db/locks";
 import { postMovements, type Tx } from "@/server/stock";
 import { actorOf, docNo, lineScope, once, scopeOf, specialTile, tileByCode } from "./core";
@@ -55,10 +56,22 @@ export async function createPurchaseOrder(ctx: Context, input: z.input<typeof po
   });
 }
 
+const partsSchema = z
+  .array(
+    z.object({
+      tileCode: z.string().trim().toUpperCase().min(4, "Scan or type the tile code"),
+      quantity: qty.min(1, "At least 1"),
+    }),
+  )
+  .max(50);
+type Part = z.output<typeof partsSchema>[number];
+
 export const receiptSchema = z
   .object({
     key: z.string().max(64).optional(),
     purchaseOrderId: z.string().optional().nullable(),
+    /** Put good units straight on storage tiles in the same transaction (per line `putAway`). */
+    putAwayNow: z.boolean().default(false),
     lines: z
       .array(
         z.object({
@@ -69,6 +82,7 @@ export const receiptSchema = z
           batchNo: z.string().trim().max(40).optional().nullable(),
           mfgDate: date,
           expiryDate: date,
+          putAway: partsSchema.optional(),
         }),
       )
       .min(1, "Add at least one line"),
@@ -83,16 +97,33 @@ export const receiptSchema = z
           path: ["lines", i, "expiryDate"],
           message: "Expiry is before manufacturing date",
         });
+      const parts = (l.putAway ?? []).reduce((n, p) => n + p.quantity, 0);
+      if (v.putAwayNow && parts > l.received)
+        c.addIssue({
+          code: "custom",
+          path: ["lines", i, "putAway"],
+          message: `Tiles add up to ${parts}, more than the ${l.received} good units`,
+        });
     }),
   );
 
 /**
  * Record what actually arrived. Good units go to the RECEIVING tile (not yet
  * pickable), damaged units straight to the DAMAGED tile. Shortage is recorded.
+ * With putAwayNow, each line's `putAway` tiles are filled in the same transaction
+ * (RECEIVING -> tile, like a normal putaway); anything not placed stays in the queue.
  */
 export async function receiveGoods(ctx: Context, input: z.input<typeof receiptSchema>) {
   const v = receiptSchema.parse(input);
+  const placing = v.putAwayNow ? v.lines.flatMap((l) => l.putAway ?? []) : [];
   return once(ctx, v.key, "inward.receive", async (tx) => {
+    if (placing.length) await lockTiles(tx, ctx, placing);
+    const book = placing.length
+      ? await loadBook(
+          tx,
+          v.lines.map((l) => l.productId),
+        )
+      : null;
     const po = v.purchaseOrderId
       ? await tx.purchaseOrder.findUnique({ where: { id: v.purchaseOrderId }, include: { lines: true } })
       : null;
@@ -134,7 +165,7 @@ export async function receiveGoods(ctx: Context, input: z.input<typeof receiptSc
         : null;
       const expected = l.expected ?? po?.lines.find((x) => x.productId === p.id)?.quantity ?? null;
       const short = expected == null ? 0 : Math.max(0, expected - l.received - l.damaged);
-      await tx.inwardReceiptLine.create({
+      const line = await tx.inwardReceiptLine.create({
         data: {
           ...scopeOf(ctx),
           inwardReceiptId: receipt.id,
@@ -168,6 +199,7 @@ export async function receiveGoods(ctx: Context, input: z.input<typeof receiptSc
           reason: `Damaged on arrival, GRN ${receipt.receiptNumber}`,
         },
       ]);
+      if (book && l.putAway?.length) await moveToTiles(ctx, tx, book, line, l.putAway, `Line ${i + 1} (${p.sku}): `);
     }
 
     if (po) await updatePoStatus(tx, po.id);
@@ -197,12 +229,12 @@ async function updatePoStatus(tx: Tx, poId: string) {
   });
 }
 
-/** Lines whose good units still sit on the receiving tile. */
+/** Lines whose good units (or some of them) still sit on the receiving tile. */
 export function putawayQueue(ctx: Context) {
   return ctx.db.inwardReceiptLine.findMany({
     where: { putawayAt: null, quantity: { gt: 0 } },
     include: {
-      product: { select: { sku: true, name: true, defaultLocationId: true } },
+      product: { select: { sku: true, name: true, packSize: true, defaultLocationId: true } },
       batch: true,
       inwardReceipt: { select: { receiptNumber: true, receivedAt: true } },
     },
@@ -211,33 +243,145 @@ export function putawayQueue(ctx: Context) {
   });
 }
 
-/** Where should this receipt line go? (default tile first, else nearest free tile in the company's zones) */
-export async function suggestFor(ctx: Context, lineId: string) {
-  const line = await ctx.db.inwardReceiptLine.findUnique({ where: { id: lineId }, include: { product: true } });
-  if (!line) throw new HttpError(404, "Receipt line not found.");
+/** This company's active storage tiles and what is on them (per product, so boxes can be counted). */
+async function loadBook(db: Tx, productIds: string[] = []) {
   const [tiles, sums] = await Promise.all([
-    ctx.db.location.findMany({ where: { type: "STORAGE", isActive: true } }),
-    ctx.db.stockBalance.groupBy({ by: ["locationId"], _sum: { quantity: true } }),
+    db.location.findMany({ where: { type: "STORAGE", isActive: true } }),
+    db.stockBalance.groupBy({
+      by: ["locationId", "productId"],
+      where: { quantity: { gt: 0 } },
+      _sum: { quantity: true },
+    }),
   ]);
-  const units = new Map(sums.map((s) => [s.locationId, s._sum.quantity ?? 0]));
-  const tile = suggestPutaway({
-    tiles: tiles.map((t) => ({ ...t, units: units.get(t.id) ?? 0 })),
-    companyCode: ctx.company.code,
-    quantity: line.quantity,
-    defaultLocationId: line.product.defaultLocationId,
+  const stock = sums.map((s) => ({ locationId: s.locationId, productId: s.productId, quantity: s._sum.quantity ?? 0 }));
+  const products = await db.product.findMany({
+    where: { id: { in: [...new Set([...stock.map((s) => s.productId), ...productIds])] } },
+    select: { id: true, sku: true, packSize: true, maxBoxesPerTile: true, defaultLocationId: true },
   });
-  return tile ? { id: tile.id, code: tile.code } : null;
+  const byId = new Map(products.map((p) => [p.id, p]));
+  return { ...tileBook(tiles, stock, (id) => byId.get(id)?.packSize ?? 1), product: (id: string) => byId.get(id) };
 }
-
-export const putawaySchema = z.object({
-  key: z.string().max(64).optional(),
-  lineId: z.string().min(1),
-  tileCode: z.string().trim().min(4, "Scan or type the tile code"),
-});
+type Book = Awaited<ReturnType<typeof loadBook>>;
 
 /**
- * Confirm putaway by scanning/typing the destination tile. Moves the units from
- * RECEIVING to that tile (TRANSFER_OUT + TRANSFER_IN together). Only now are they pickable.
+ * Suggested tiles for each line, split by box room: default tile first, then the
+ * nearest tiles with room. Later lines see what earlier lines already took.
+ */
+export async function suggestSplits(ctx: Context, lines: { productId: string; quantity: number }[]) {
+  const book = await loadBook(
+    ctx.db,
+    lines.map((l) => l.productId),
+  );
+  return lines.map((l) => {
+    const p = book.product(l.productId);
+    if (!p || !(l.quantity > 0)) return [];
+    const parts = splitPutaway({
+      tiles: book.view(p.id),
+      companyCode: ctx.company.code,
+      quantity: l.quantity,
+      defaultLocationId: p.defaultLocationId,
+      product: p,
+    });
+    for (const x of parts) book.add(x.tile.id, p.id, x.quantity);
+    return parts.map((x) => ({ tileCode: x.tile.code, quantity: x.quantity }));
+  });
+}
+
+/** Where should what is left of this receipt line go? (split over tiles when one cannot take it all) */
+export async function suggestFor(ctx: Context, lineId: string) {
+  const line = await ctx.db.inwardReceiptLine.findUnique({ where: { id: lineId } });
+  if (!line) throw new HttpError(404, "Receipt line not found.");
+  const [parts] = await suggestSplits(ctx, [
+    { productId: line.productId, quantity: line.quantity - line.putawayQuantity },
+  ]);
+  return parts;
+}
+
+/** Putaways onto the same tile run one after another, so two cannot both use the same room. */
+const lockTiles = (tx: Tx, ctx: Context, parts: Part[]) =>
+  lockKeys(
+    tx,
+    parts.map((p) => `tile:${ctx.warehouseId}:${p.tileCode}`),
+  );
+
+/**
+ * Move good units of a receipt line from RECEIVING to storage tiles
+ * (TRANSFER_OUT + TRANSFER_IN per tile). Only this company's active storage tiles,
+ * box capacity respected. The line leaves the queue once everything is placed.
+ */
+async function moveToTiles(ctx: Context, tx: Tx, book: Book, line: InwardReceiptLine, parts: Part[], where = "") {
+  const left = line.quantity - line.putawayQuantity;
+  const total = parts.reduce((n, p) => n + p.quantity, 0);
+  if (total > left)
+    throw new HttpError(400, `${where}only ${left} good units left to put away; the tiles add up to ${total}.`);
+  const p = book.product(line.productId);
+  if (!p) throw new HttpError(404, "Product not found.");
+  const placed: { tile: string; tileId: string; quantity: number }[] = [];
+  for (const part of parts) {
+    const tile = await tileByCode(tx, ctx, part.tileCode, ["STORAGE"]);
+    const room = roomFor(
+      book.view(p.id).find((t) => t.id === tile.id)!,
+      p,
+    );
+    if (part.quantity > room) {
+      const max = Math.min(tile.capacity ?? Infinity, p.maxBoxesPerTile ?? Infinity);
+      throw new HttpError(
+        400,
+        `${where}tile ${tile.code} has room for ${room} more units of ${p.sku} only (${max} boxes max, ${book.boxesOn(tile.id)} on it now).`,
+      );
+    }
+    const move = {
+      productId: line.productId,
+      batchId: line.batchId,
+      quantity: part.quantity,
+      referenceType: "PUTAWAY",
+      referenceId: line.id,
+      reason: `Putaway to ${tile.code}`,
+    };
+    await postMovements(tx, actorOf(ctx), [
+      { type: "TRANSFER_OUT", locationId: line.locationId, ...move },
+      { type: "TRANSFER_IN", locationId: tile.id, ...move },
+    ]);
+    book.add(tile.id, p.id, part.quantity);
+    placed.push({ tile: tile.code, tileId: tile.id, quantity: part.quantity });
+  }
+  const done = line.putawayQuantity + total;
+  await tx.inwardReceiptLine.update({
+    where: { id: line.id },
+    data: {
+      putawayQuantity: done,
+      putawayLocationId: placed[0].tileId,
+      putawayAt: done >= line.quantity ? new Date() : null,
+      putawayById: ctx.user.id,
+    },
+  });
+  await audit(
+    {
+      ...ctx.auditMeta,
+      action: "inward.putaway",
+      entity: "inward_receipt_line",
+      entityId: line.id,
+      after: { parts: placed.map(({ tile, quantity }) => ({ tile, quantity })), remaining: line.quantity - done },
+    },
+    tx,
+  );
+  return { quantity: total, remaining: line.quantity - done };
+}
+
+export const putawaySchema = z
+  .object({
+    key: z.string().max(64).optional(),
+    lineId: z.string().min(1),
+    /** One tile for everything that is left... */
+    tileCode: z.string().trim().toUpperCase().min(4, "Scan or type the tile code").optional(),
+    /** ...or a split over several tiles (the rest stays in the queue). */
+    parts: partsSchema.min(1).optional(),
+  })
+  .refine((v) => v.tileCode || v.parts, { message: "Scan or type the tile code", path: ["tileCode"] });
+
+/**
+ * Confirm putaway by scanning/typing the destination tile(s). Moves the units from
+ * RECEIVING to the tile(s). Only now are they pickable.
  */
 export async function confirmPutaway(ctx: Context, input: z.input<typeof putawaySchema>) {
   const v = putawaySchema.parse(input);
@@ -246,50 +390,10 @@ export async function confirmPutaway(ctx: Context, input: z.input<typeof putaway
     const line = await tx.inwardReceiptLine.findUnique({ where: { id: v.lineId } });
     if (!line) throw new HttpError(404, "Receipt line not found.");
     if (line.putawayAt) throw new HttpError(409, "This line is already put away.");
-    const tile = await tileByCode(tx, ctx, v.tileCode, ["STORAGE"]);
-    if (tile.capacity != null) {
-      const agg = await tx.stockBalance.aggregate({ where: { locationId: tile.id }, _sum: { quantity: true } });
-      if ((agg._sum.quantity ?? 0) + line.quantity > tile.capacity) {
-        throw new HttpError(
-          400,
-          `Tile ${tile.code} has room for ${tile.capacity - (agg._sum.quantity ?? 0)} more units only.`,
-        );
-      }
-    }
-    const ref = { referenceType: "PUTAWAY", referenceId: line.id, reason: `Putaway to ${tile.code}` };
-    await postMovements(tx, actorOf(ctx), [
-      {
-        type: "TRANSFER_OUT",
-        productId: line.productId,
-        batchId: line.batchId,
-        locationId: line.locationId,
-        quantity: line.quantity,
-        ...ref,
-      },
-      {
-        type: "TRANSFER_IN",
-        productId: line.productId,
-        batchId: line.batchId,
-        locationId: tile.id,
-        quantity: line.quantity,
-        ...ref,
-      },
-    ]);
-    await tx.inwardReceiptLine.update({
-      where: { id: line.id },
-      data: { putawayLocationId: tile.id, putawayAt: new Date(), putawayById: ctx.user.id },
-    });
-    await audit(
-      {
-        ...ctx.auditMeta,
-        action: "inward.putaway",
-        entity: "inward_receipt_line",
-        entityId: line.id,
-        after: { tile: tile.code, quantity: line.quantity },
-      },
-      tx,
-    );
-    return { tileCode: tile.code, quantity: line.quantity };
+    const parts = v.parts ?? [{ tileCode: v.tileCode!, quantity: line.quantity - line.putawayQuantity }];
+    await lockTiles(tx, ctx, parts);
+    const r = await moveToTiles(ctx, tx, await loadBook(tx, [line.productId]), line, parts);
+    return { tileCode: parts.map((p) => p.tileCode).join(", "), ...r };
   });
 }
 

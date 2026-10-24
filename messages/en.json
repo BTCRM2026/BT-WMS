@@ -148,6 +148,10 @@
       "stock": "Check stock",
       "map": "Open floor map",
       "products": "Browse products"
+    },
+    "stale": {
+      "title": "Goods on the receiving tile for over {hours} h",
+      "body": "{units} units on {lines} receipt line(s) are not pickable yet. Put them away."
     }
   },
   "products": {
@@ -182,8 +186,10 @@
       "type": "Type",
       "fill": "Fill",
       "units": "Units",
-      "capacity": "Capacity",
-      "active": "Active"
+      "capacity": "Capacity (boxes)",
+      "active": "Active",
+      "pick": "Select",
+      "boxes": "Boxes"
     },
     "types": {
       "STORAGE": "Storage",
@@ -196,11 +202,14 @@
     "searchPlaceholder": "Search tile code",
     "empty": "No tiles match these filters.",
     "viewTable": "Table",
-    "viewMap": "Floor map"
+    "viewMap": "Floor map",
+    "notSet": "Not set",
+    "picked": "{count} selected",
+    "pickTile": "Select {code}"
   },
   "map": {
     "title": "Warehouse floor map",
-    "subtitle": "Each square is a floor tile. Colour shows how full it is.",
+    "subtitle": "Each square is a floor tile. It shows boxes used / capacity; colour shows how full it is.",
     "legend": "Fill level",
     "empty": "Empty",
     "low": "Under 50%",
@@ -212,11 +221,15 @@
     "levelN": "Level {level}",
     "tileStock": "Stock on {code}",
     "tileEmpty": "Nothing is stored on this tile.",
-    "tileSummary": "{units} units · {capacity} capacity",
+    "tileSummary": "{boxes} boxes ({units} units) · capacity: {capacity}",
     "product": "Product",
     "batch": "Batch",
     "expiry": "Expiry",
-    "qty": "Qty"
+    "qty": "Qty",
+    "notSet": "not set",
+    "notSetHint": "Capacity not set",
+    "boxesHint": "Numbers are boxes used / capacity.",
+    "boxesOf": "{boxes} of {capacity} boxes"
   },
   "stock": {
     "title": "Stock",

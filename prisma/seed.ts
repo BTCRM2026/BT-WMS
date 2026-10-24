@@ -94,6 +94,7 @@ async function main() {
     }
 
     // Tiles: storage zone <code> with rows A-D x columns 01-10 at level 1, plus special areas in zone <code>X.
+    // Capacity is in boxes (cartons).
     const tiles: { zone: string; row: string; column: number; type: LocationType; capacity: number }[] = [];
     for (const row of ["A", "B", "C", "D"])
       for (let column = 1; column <= 10; column++)

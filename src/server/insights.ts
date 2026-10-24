@@ -1,4 +1,5 @@
 import type { TenantDb } from "@/server/db/tenant";
+import { tileBook } from "@/lib/putaway";
 
 /**
  * Read-only figures for the dashboard, alerts and lists. Every number comes
@@ -133,7 +134,8 @@ export async function dashboardData(db: TenantDb) {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const [todayMoves, pendingPutaway, pendingPicks] = await Promise.all([
+  const hours = (await db.companySetting.findFirst())?.receivingAlertHours ?? 4;
+  const [todayMoves, pendingPutaway, pendingPicks, stale] = await Promise.all([
     db.stockMovement.groupBy({
       by: ["type"],
       where: { createdAt: { gte: today }, type: { in: ["INWARD", "OUTWARD"] } },
@@ -141,6 +143,15 @@ export async function dashboardData(db: TenantDb) {
     }),
     db.inwardReceiptLine.count({ where: { putawayAt: null, quantity: { gt: 0 } } }),
     db.pickList.count({ where: { status: { in: ["OPEN", "IN_PROGRESS"] } } }),
+    // Goods left on the RECEIVING tile longer than the company's warning time.
+    db.inwardReceiptLine.findMany({
+      where: {
+        putawayAt: null,
+        quantity: { gt: 0 },
+        inwardReceipt: { receivedAt: { lt: new Date(Date.now() - hours * 3600_000) } },
+      },
+      select: { quantity: true, putawayQuantity: true },
+    }),
   ]);
   const todayQty = (type: string) => todayMoves.find((m) => m.type === type)?._sum.quantity ?? 0;
 
@@ -161,6 +172,11 @@ export async function dashboardData(db: TenantDb) {
     zones: [...zones].sort().map(([zone, units]) => ({ zone, units })),
     expiry: months.map(({ label, units }) => ({ label, units })),
     alerts: alertList,
+    staleReceiving: {
+      hours,
+      lines: stale.length,
+      units: stale.reduce((s, l) => s + l.quantity - l.putawayQuantity, 0),
+    },
   };
 }
 
@@ -173,7 +189,7 @@ export async function tilesWithStock(db: TenantDb) {
   const [products, batches] = await Promise.all([
     db.product.findMany({
       where: { id: { in: [...new Set(balances.map((b) => b.productId))] } },
-      select: { id: true, sku: true, name: true },
+      select: { id: true, sku: true, name: true, packSize: true },
     }),
     db.batch.findMany({
       where: { id: { in: balances.flatMap((b) => (b.batchId ? [b.batchId] : [])) } },
@@ -182,6 +198,7 @@ export async function tilesWithStock(db: TenantDb) {
   ]);
   const productById = new Map(products.map((p) => [p.id, p]));
   const batchById = new Map(batches.map((b) => [b.id, b]));
+  const book = tileBook(locations, balances, (id) => productById.get(id)?.packSize ?? 1);
   return locations.map((l) => {
     const lines = balances
       .filter((b) => b.locationId === l.id)
@@ -193,6 +210,7 @@ export async function tilesWithStock(db: TenantDb) {
         qty: b.quantity,
       }));
     const units = lines.reduce((s, x) => s + x.qty, 0);
+    const boxes = book.boxesOn(l.id);
     return {
       id: l.id,
       code: l.code,
@@ -204,7 +222,9 @@ export async function tilesWithStock(db: TenantDb) {
       capacity: l.capacity,
       isActive: l.isActive,
       units,
-      fill: l.capacity ? Math.min(1, units / l.capacity) : null,
+      /** Boxes on the tile; capacity is in boxes too. */
+      boxes,
+      fill: l.capacity ? Math.min(1, boxes / l.capacity) : null,
       lines,
     };
   });

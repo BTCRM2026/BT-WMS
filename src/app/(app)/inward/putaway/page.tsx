@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { Card, EmptyState, PageHeader } from "@/components/ui/primitives";
 import { requirePage } from "@/server/auth/context";
-import { putawayQueue, suggestFor } from "@/server/ops/inward";
+import { putawayQueue, suggestSplits } from "@/server/ops/inward";
 import { PutawayCard } from "./putaway-card";
 
 export const metadata = { title: "Putaway" };
@@ -10,7 +10,11 @@ export default async function PutawayPage() {
   const ctx = await requirePage("inward.view");
   const t = await getTranslations("ops.inward");
   const queue = await putawayQueue(ctx);
-  const suggestions = await Promise.all(queue.map((l) => suggestFor(ctx, l.id)));
+  // One plan for the whole queue, so two lines are not both sent to the same last free boxes.
+  const suggestions = await suggestSplits(
+    ctx,
+    queue.map((l) => ({ productId: l.productId, quantity: l.quantity - l.putawayQuantity })),
+  );
   return (
     <>
       <PageHeader title={t("putawayTitle")} subtitle={t("putawaySubtitle")} />
@@ -29,10 +33,10 @@ export default async function PutawayPage() {
                   sku: l.product.sku,
                   name: l.product.name,
                   batch: l.batch?.batchNo ?? null,
-                  qty: l.quantity,
+                  qty: l.quantity - l.putawayQuantity,
                   receipt: l.inwardReceipt.receiptNumber,
                 }}
-                suggestion={suggestions[i]?.code ?? null}
+                suggestion={suggestions[i]}
               />
             </li>
           ))}

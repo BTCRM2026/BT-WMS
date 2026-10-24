@@ -7,7 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, Field, Input } from "@/components/ui/primitives";
 import { saveSettingsAction } from "./actions";
 
-type V = { writeOffApproval: boolean; countApproval: boolean; lockedBefore: string; digestRecipients: string };
+type V = {
+  writeOffApproval: boolean;
+  countApproval: boolean;
+  lockedBefore: string;
+  digestRecipients: string;
+  receivingAlertHours: number | string;
+};
 
 export function SettingsForm({ initial }: { initial: V }) {
   const t = useTranslations("settings");
@@ -46,6 +52,18 @@ export function SettingsForm({ initial }: { initial: V }) {
             value={v.lockedBefore}
             onChange={(e) => setV({ ...v, lockedBefore: e.target.value })}
             className="max-w-48"
+          />
+        </Field>
+        <Field label={t("receivingAlertHours")} htmlFor="recv-hours" hint={t("receivingAlertHoursHint")}>
+          <Input
+            id="recv-hours"
+            type="number"
+            min={1}
+            max={168}
+            inputMode="numeric"
+            value={v.receivingAlertHours}
+            onChange={(e) => setV({ ...v, receivingAlertHours: e.target.value })}
+            className="max-w-32"
           />
         </Field>
         <Field label={t("digest")} htmlFor="digest" hint={t("digestHint")}>

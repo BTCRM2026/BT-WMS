@@ -11,11 +11,18 @@ export async function getSettings(db: Context["db"] | Tx, companyId: string) {
       countApproval: true,
       lockedBefore: null as Date | null,
       digestRecipients: null as string | null,
+      receivingAlertHours: 4,
     }
   );
 }
 
 export const settingsSchema = z.object({
+  receivingAlertHours: z.coerce
+    .number()
+    .int("Whole hours")
+    .min(1, "At least 1 hour")
+    .max(168, "At most 168 hours")
+    .default(4),
   writeOffApproval: z.boolean(),
   countApproval: z.boolean(),
   lockedBefore: z
@@ -44,6 +51,7 @@ export async function saveSettings(ctx: Context, input: z.input<typeof settingsS
     countApproval: v.countApproval,
     lockedBefore: v.lockedBefore,
     digestRecipients: v.digestRecipients || null,
+    receivingAlertHours: v.receivingAlertHours,
   };
   const after = await ctx.db.companySetting.upsert({
     where: { companyId: ctx.company.id },

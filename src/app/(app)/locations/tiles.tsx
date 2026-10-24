@@ -6,15 +6,18 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { DataTable, type Column, type Filter } from "@/components/data-table";
 import { Sheet, SheetContent } from "@/components/ui/menu";
-import { Badge, EmptyState } from "@/components/ui/primitives";
+import { Badge, EmptyState, Input } from "@/components/ui/primitives";
 import { cn, fmtDate, fmtNumber } from "@/lib/utils";
 import { rowLetter } from "@/lib/tile";
 import { FormError, useSubmit } from "@/components/forms";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { setTileActiveAction } from "./actions";
+import { setCapacityAction, setTileActiveAction } from "./actions";
 import type { TileWithStock } from "@/server/insights";
 
 const TYPES = ["STORAGE", "RECEIVING", "DISPATCH", "DAMAGED", "QUARANTINE", "RETURN"] as const;
+
+/** Storage tile without a box capacity: unlimited, but the user should fill it in. */
+export const capacityMissing = (t: TileWithStock) => t.type === "STORAGE" && t.capacity == null;
 
 export const fillLevel = (t: TileWithStock) =>
   t.units === 0 ? "empty" : t.fill == null || t.fill < 0.5 ? "low" : t.fill < 0.9 ? "mid" : "full";
@@ -63,12 +66,18 @@ function TileSheet({
   const t = useTranslations("map");
   const to = useTranslations("ops");
   const { run, pending, error } = useSubmit();
+  const cap = useSubmit();
+  const [capacity, setCapacity] = useState("");
   return (
     <Sheet open={!!tile} onOpenChange={(o) => !o && onClose()}>
       {tile && (
         <SheetContent
           title={t("tileStock", { code: tile.code })}
-          description={t("tileSummary", { units: fmtNumber(tile.units), capacity: tile.capacity ?? "—" })}
+          description={t("tileSummary", {
+            boxes: fmtNumber(tile.boxes),
+            units: fmtNumber(tile.units),
+            capacity: tile.capacity ?? t("notSet"),
+          })}
         >
           {tile.lines.length === 0 ? (
             <EmptyState title={t("tileEmpty")} />
@@ -107,7 +116,36 @@ function TileSheet({
               </Button>
             )}
           </div>
-          <FormError error={error} />
+          {canManage && (
+            <form
+              className="mt-4 flex items-end gap-2 border-t border-line pt-4"
+              onSubmit={(e) => {
+                e.preventDefault();
+                cap.run(
+                  setCapacityAction,
+                  { ids: [tile.id], capacity: capacity ? Number(capacity) : null },
+                  { success: to("saved"), then: onClose },
+                );
+              }}
+            >
+              <label className="grid flex-1 gap-1 text-sm font-medium" htmlFor="sheet-capacity">
+                {to("tileForm.capacity")}
+                <Input
+                  id="sheet-capacity"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  placeholder={tile.capacity == null ? t("notSet") : String(tile.capacity)}
+                  value={capacity}
+                  onChange={(e) => setCapacity(e.target.value)}
+                />
+              </label>
+              <Button type="submit" variant="secondary" loading={cap.pending}>
+                {to("save")}
+              </Button>
+            </form>
+          )}
+          <FormError error={error ?? cap.error} />
         </SheetContent>
       )}
     </Sheet>
@@ -116,7 +154,18 @@ function TileSheet({
 
 export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; canManage?: boolean }) {
   const t = useTranslations("locations");
+  const to = useTranslations("ops");
   const [open, setOpen] = useState<TileWithStock | null>(null);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [bulkCap, setBulkCap] = useState("");
+  const bulk = useSubmit();
+  const toggle = (id: string) =>
+    setPicked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   const columns: Column<TileWithStock>[] = [
     {
       key: "code",
@@ -133,7 +182,15 @@ export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; c
       cell: (r) => <Badge tone={r.type === "STORAGE" ? "neutral" : "info"}>{t(`types.${r.type}`)}</Badge>,
     },
     { key: "units", header: t("cols.units"), value: (r) => r.units, cell: (r) => fmtNumber(r.units), align: "right" },
-    { key: "capacity", header: t("cols.capacity"), value: (r) => r.capacity, align: "right" },
+    { key: "boxes", header: t("cols.boxes"), value: (r) => r.boxes, cell: (r) => fmtNumber(r.boxes), align: "right" },
+    {
+      key: "capacity",
+      header: t("cols.capacity"),
+      value: (r) => r.capacity,
+      cell: (r) =>
+        capacityMissing(r) ? <Badge tone="warning">{t("notSet")}</Badge> : r.capacity == null ? "—" : r.capacity,
+      align: "right",
+    },
     {
       key: "fill",
       header: t("cols.fill"),
@@ -154,6 +211,26 @@ export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; c
       ),
     },
     { key: "active", header: t("cols.active"), value: (r) => (r.isActive ? "Yes" : "No"), defaultHidden: true },
+    // Not the first column: the table wraps that one in a button, and a checkbox may not sit inside a button.
+    ...(canManage
+      ? [
+          {
+            key: "pick",
+            header: t("cols.pick"),
+            value: () => null,
+            cell: (r: TileWithStock) => (
+              <input
+                type="checkbox"
+                aria-label={t("pickTile", { code: r.code })}
+                checked={picked.has(r.id)}
+                onClick={(e) => e.stopPropagation()}
+                onChange={() => toggle(r.id)}
+                className="size-5 accent-[var(--primary)]"
+              />
+            ),
+          },
+        ]
+      : []),
   ];
   const zones = [...new Set(tiles.map((x) => x.zone))];
   const filters: Filter<TileWithStock>[] = [
@@ -172,6 +249,44 @@ export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; c
   ];
   return (
     <>
+      {picked.size > 0 && (
+        <form
+          className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-primary/40 bg-primary-soft p-3 text-sm"
+          data-testid="bulk-capacity"
+          onSubmit={(e) => {
+            e.preventDefault();
+            bulk.run(
+              setCapacityAction,
+              { ids: [...picked], capacity: bulkCap ? Number(bulkCap) : null },
+              {
+                success: (d) => to("capacity.done", { count: (d as { updated: number }).updated }),
+                then: () => setPicked(new Set()),
+              },
+            );
+          }}
+        >
+          <span className="self-center font-medium">{t("picked", { count: picked.size })}</span>
+          <label className="grid gap-1" htmlFor="bulk-cap">
+            {to("tileForm.capacity")}
+            <Input
+              id="bulk-cap"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              value={bulkCap}
+              onChange={(e) => setBulkCap(e.target.value)}
+              className="w-32"
+            />
+          </label>
+          <Button type="submit" loading={bulk.pending}>
+            {to("capacity.apply")}
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => setPicked(new Set())}>
+            {to("cancel")}
+          </Button>
+          <FormError error={bulk.error} />
+        </form>
+      )}
       <DataTable
         id="locations"
         rows={tiles}
@@ -182,7 +297,7 @@ export function LocationsTable({ tiles, canManage }: { tiles: TileWithStock[]; c
         onRowClick={setOpen}
         exportName="tiles"
       />
-      <TileSheet tile={open} onClose={() => setOpen(null)} canManage={canManage} />
+      <TileSheet key={open?.id} tile={open} onClose={() => setOpen(null)} canManage={canManage} />
     </>
   );
 }
@@ -211,13 +326,24 @@ export function FloorMap({ tiles, canManage }: { tiles: TileWithStock[]; canMana
           !tile.isActive && "opacity-50",
         )}
       >
-        <span className="sr-only">{`${tile.code}: ${fmtNumber(tile.units)} / ${tile.capacity ?? "—"} (${t(level)})`}</span>
+        <span className="sr-only">
+          {`${tile.code}: ${t("boxesOf", { boxes: tile.boxes, capacity: tile.capacity ?? t("notSet") })} (${t(level)})`}
+        </span>
         <span aria-hidden className="font-mono text-[10px] leading-none font-medium text-foreground sm:text-[11px]">
           {wide ? tile.code : `${rowLetter(tile.row)}-${String(tile.column).padStart(2, "0")}`}
         </span>
         <span aria-hidden className="text-xs font-semibold tabular sm:text-sm">
-          {tile.fill == null ? fmtNumber(tile.units) : `${Math.round(tile.fill * 100)}%`}
+          {tile.capacity == null ? fmtNumber(tile.boxes) : `${tile.boxes}/${tile.capacity}`}
         </span>
+        {capacityMissing(tile) && (
+          <span
+            aria-hidden
+            title={t("notSet")}
+            className="absolute top-1 right-1 grid size-4 place-items-center rounded-full bg-warning text-[10px] font-bold text-white"
+          >
+            ?
+          </span>
+        )}
       </button>
     );
   };
@@ -232,6 +358,16 @@ export function FloorMap({ tiles, canManage }: { tiles: TileWithStock[]; canMana
             {t(l)}
           </span>
         ))}
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            aria-hidden
+            className="grid size-4 place-items-center rounded-full bg-warning text-[10px] font-bold text-white"
+          >
+            ?
+          </span>
+          {t("notSetHint")}
+        </span>
+        <span className="text-muted">{t("boxesHint")}</span>
       </div>
 
       {levels.length > 1 && (
@@ -301,7 +437,7 @@ export function FloorMap({ tiles, canManage }: { tiles: TileWithStock[]; canMana
           </div>
         </section>
       )}
-      <TileSheet tile={open} onClose={() => setOpen(null)} canManage={canManage} />
+      <TileSheet key={open?.id} tile={open} onClose={() => setOpen(null)} canManage={canManage} />
     </div>
   );
 }

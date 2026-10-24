@@ -50,15 +50,24 @@ for (const c of COMPANIES) {
     await page.locator("#damaged-0").fill("2");
     await page.locator("#b-0").fill(`E2E-${c.code}`);
     await page.locator("#x-0").fill("2027-12-31");
-    await page.getByRole("button", { name: "Post receipt" }).click();
-    await expect(page).toHaveURL(/\/inward\/putaway/);
-
-    // 3. Putaway on the suggested tile (the product's default tile).
-    const card = page.getByTestId(`putaway-${sku}`).first();
-    const suggested = (await card.locator(".font-mono").first().textContent())!.trim();
-    await card.getByRole("button", { name: suggested }).click();
-    await card.getByRole("button", { name: "Confirm" }).click();
-    await toast(page, new RegExp(`22 units put away on ${suggested}`));
+    if (c.code === "BT") {
+      // 3a. Put away while receiving: the suggested tile (the product's default tile) takes all 22.
+      await expect(page.locator("#pq-0-0")).toHaveValue("22");
+      await expect(page.locator("#pt-0-0")).not.toHaveValue("");
+      await page.getByRole("button", { name: "Post receipt" }).click();
+      await expect(page).toHaveURL(/\/inward$/);
+      await expect(page.getByTestId("damaged-on-receipt")).toContainText(sku);
+    } else {
+      // 3b. Goods wait on the receiving tile; put them away from the queue on the suggested tile.
+      await page.getByTestId("put-away-now").uncheck();
+      await page.getByRole("button", { name: "Post receipt" }).click();
+      await expect(page).toHaveURL(/\/inward\/putaway/);
+      const card = page.getByTestId(`putaway-${sku}`).first();
+      const suggested = await card.locator('input[id^="pt-"]').first().inputValue();
+      expect(suggested).toMatch(/^RF/);
+      await card.getByRole("button", { name: "Confirm" }).click();
+      await toast(page, new RegExp(`22 units put away on ${suggested}`));
+    }
 
     // 4. Billing enters a sales order for 5; the store keeper creates the FEFO pick list.
     await become(page, `billing@${c.domain}`);

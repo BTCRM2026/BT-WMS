@@ -32,7 +32,7 @@ export function Importer({ columns }: { columns: string[] }) {
   const template = () => {
     const csv =
       columns.join(",") +
-      "\r\nBT-0100,Example Argan Shampoo 250 ml,PCS,12,8901000000100,24,600,yes,BT-A-01-1,450,250\r\n";
+      "\r\nBT-0100,Example Argan Shampoo 250 ml,PCS,12,8901000000100,24,600,8,yes,BT-A-01-1,450,250\r\n";
     const a = Object.assign(document.createElement("a"), {
       href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })),
       download: "products-template.csv",

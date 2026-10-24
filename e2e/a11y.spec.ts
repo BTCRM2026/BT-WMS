@@ -22,6 +22,8 @@ const SCREENS = [
   "/stock-audits",
   "/stock/ledger",
   "/locations/new",
+  "/locations/capacity",
+  "/inward",
   "/products/import",
   "/reports",
   "/owner",

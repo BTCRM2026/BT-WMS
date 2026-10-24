@@ -16,6 +16,19 @@ export default async function DamagesPage() {
     take: 200,
     include: { product: true, batch: true, location: true },
   });
+  // Write-offs of cartons damaged on arrival link to their receipt line: show that receipt's photos.
+  const fromReceipt = await ctx.db.inwardReceiptLine.findMany({
+    where: { id: { in: list.flatMap((d) => (d.receiptLineId ? [d.receiptLineId] : [])) } },
+    select: { id: true, inwardReceiptId: true },
+  });
+  const photos = await ctx.db.attachment.findMany({
+    where: { entity: "inward_receipt", entityId: { in: fromReceipt.map((l) => l.inwardReceiptId) } },
+    select: { id: true, entityId: true },
+  });
+  const photosOf = (lineId: string | null) => {
+    const receiptId = fromReceipt.find((l) => l.id === lineId)?.inwardReceiptId;
+    return receiptId ? photos.filter((p) => p.entityId === receiptId) : [];
+  };
   return (
     <>
       <PageHeader title={t("damages.title")} subtitle={t("damages.subtitle")} />
@@ -36,6 +49,14 @@ export default async function DamagesPage() {
                     <p className="text-muted">
                       {d.location.code} · {t("batch")} {d.batch?.batchNo ?? "—"} · {fmtNumber(d.quantity)} ·{" "}
                       {fmtDate(d.createdAt)} · {d.reason}
+                      {photosOf(d.receiptLineId).map((p, i) => (
+                        <span key={p.id}>
+                          {" · "}
+                          <a href={`/api/attachments/${p.id}`} target="_blank" rel="noreferrer" className="underline">
+                            {t("inward.photoN", { n: i + 1 })}
+                          </a>
+                        </span>
+                      ))}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">

@@ -1,4 +1,4 @@
-import { Plus, Printer } from "lucide-react";
+import { Boxes, Plus, Printer } from "lucide-react";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { buttonVariants } from "@/components/ui/button";
@@ -24,6 +24,11 @@ export default async function LocationsPage() {
             <Link href="/locations/print" className={buttonVariants({ variant: "secondary" })}>
               <Printer /> {to("tileForm.print")}
             </Link>
+            {ctx.can("locations.manage") && (
+              <Link href="/locations/capacity" className={buttonVariants({ variant: "secondary" })}>
+                <Boxes /> {to("capacity.title")}
+              </Link>
+            )}
             {ctx.can("locations.manage") && (
               <Link href="/locations/new" className={buttonVariants()}>
                 <Plus /> {to("tileForm.newTitle")}

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { HttpError, type Context } from "@/server/auth/context";
 import { audit } from "@/server/audit";
 import { computeVariance } from "@/lib/variance";
+import { lockKeys } from "@/server/db/locks";
 import { postMovements } from "@/server/stock";
 import { getSettings } from "./settings";
 import { actorOf, balanceAt, docNo, lineScope, once, scopeOf, specialTile, tileByCode } from "./core";
@@ -195,9 +196,13 @@ export const writeOffSchema = z.object({
 });
 
 /** Report a write-off. Nothing moves until a WAREHOUSE_MANAGER (or above) approves it. */
-export async function reportWriteOff(ctx: Context, input: z.input<typeof writeOffSchema>) {
+export async function reportWriteOff(
+  ctx: Context,
+  input: z.input<typeof writeOffSchema>,
+  link?: { receiptLineId: string },
+) {
   const v = writeOffSchema.parse(input);
-  const r = await reportWriteOffOnce(ctx, v);
+  const r = await reportWriteOffOnce(ctx, v, link);
   // Owner setting: write-offs may skip approval.
   if (!(await getSettings(ctx.db, ctx.company.id)).writeOffApproval) {
     const d = await ctx.db.damage.findUnique({ where: { id: r.id } });
@@ -206,8 +211,15 @@ export async function reportWriteOff(ctx: Context, input: z.input<typeof writeOf
   return r;
 }
 
-async function reportWriteOffOnce(ctx: Context, v: z.output<typeof writeOffSchema>) {
+async function reportWriteOffOnce(ctx: Context, v: z.output<typeof writeOffSchema>, link?: { receiptLineId: string }) {
   return once(ctx, v.key, "writeoff.report", async (tx) => {
+    if (link) {
+      await lockKeys(tx, [`writeoff-line:${link.receiptLineId}`]);
+      const dup = await tx.damage.findFirst({
+        where: { receiptLineId: link.receiptLineId, status: { not: "CANCELLED" } },
+      });
+      if (dup) throw new HttpError(409, `Already written off as ${dup.damageNumber}.`);
+    }
     const tile = await tileByCode(tx, ctx, v.tileCode);
     const have = await balanceAt(tx, v.productId, tile.id, v.batchId ?? null);
     if (have < v.quantity) throw new HttpError(400, `Only ${have} on ${tile.code}.`);
@@ -222,11 +234,45 @@ async function reportWriteOffOnce(ctx: Context, v: z.output<typeof writeOffSchem
         quantity: v.quantity,
         reason: v.reason,
         reportedById: ctx.user.id,
+        receiptLineId: link?.receiptLineId,
       },
     });
     await audit({ ...ctx.auditMeta, action: "writeoff.report", entity: "damage", entityId: d.id, after: v }, tx);
     return { id: d.id, damageNumber: d.damageNumber };
   });
+}
+
+/**
+ * One tap from the receipt: write off the cartons that arrived damaged and sit on
+ * the DAMAGED tile. Same flow (and approval setting) as any write-off; the
+ * write-off is linked to the receipt line, so its photos show with it.
+ */
+export async function writeOffReceiptDamage(ctx: Context, input: { key?: string; lineId: string }) {
+  const line = await ctx.db.inwardReceiptLine.findUnique({
+    where: { id: input.lineId },
+    include: { inwardReceipt: { select: { receiptNumber: true } } },
+  });
+  if (!line) throw new HttpError(404, "Receipt line not found.");
+  if (line.damagedQuantity <= 0) throw new HttpError(400, "No damaged units on this receipt line.");
+  const dup = await ctx.db.damage.findFirst({ where: { receiptLineId: line.id, status: { not: "CANCELLED" } } });
+  if (dup) throw new HttpError(409, `Already written off as ${dup.damageNumber}.`);
+  const tile = await specialTile(ctx.db, "DAMAGED");
+  const have = await balanceAt(ctx.db, line.productId, tile.id, line.batchId);
+  const quantity = Math.min(line.damagedQuantity, have);
+  if (quantity <= 0) throw new HttpError(400, `The damaged units are no longer on ${tile.code}.`);
+  return reportWriteOff(
+    ctx,
+    {
+      key: input.key,
+      kind: "DAMAGE",
+      productId: line.productId,
+      batchId: line.batchId,
+      tileCode: tile.code,
+      quantity,
+      reason: `Damaged on receipt ${line.inwardReceipt.receiptNumber}`,
+    },
+    { receiptLineId: line.id },
+  );
 }
 
 export const decideSchema = z.object({

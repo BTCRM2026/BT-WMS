@@ -1,27 +1,34 @@
 "use client";
 
-import { MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import { FormError, TileInput, useSubmit } from "@/components/forms";
+import { FormError, useSubmit } from "@/components/forms";
 import { Button } from "@/components/ui/button";
-import { Badge, Card } from "@/components/ui/primitives";
+import { Card } from "@/components/ui/primitives";
 import { fmtNumber } from "@/lib/utils";
 import { putawayAction } from "../actions";
+import { PutOnTiles, type Part } from "../new/receive-form";
 
-/** One receipt line: big targets, scan/type the tile, confirm. Built for one hand on a cheap phone. */
+/**
+ * One receipt line: the suggested tile(s) are filled in (split by box room when one
+ * tile cannot take everything). Edit or scan, confirm. What is not placed stays here.
+ * Built for one hand on a cheap phone.
+ */
 export function PutawayCard({
   line,
   suggestion,
   canAct,
 }: {
   line: { id: string; sku: string; name: string; batch: string | null; qty: number; receipt: string };
-  suggestion: string | null;
+  suggestion: { tileCode: string; quantity: number }[];
   canAct: boolean;
 }) {
   const t = useTranslations("ops");
-  const [tile, setTile] = useState("");
+  const [parts, setParts] = useState<Part[]>(
+    suggestion.map((s) => ({ tileCode: s.tileCode, quantity: String(s.quantity) })),
+  );
   const { run, pending, error } = useSubmit();
+  const valid = parts.filter((p) => p.tileCode && Number(p.quantity) > 0);
   return (
     <Card className="p-4" data-testid={`putaway-${line.sku}`}>
       <div className="flex items-start justify-between gap-3">
@@ -33,27 +40,17 @@ export function PutawayCard({
         </div>
         <span className="shrink-0 text-xl font-semibold tabular">{fmtNumber(line.qty)}</span>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <MapPin className="size-4 text-muted" aria-hidden />
-        {t("inward.suggested")}:
-        {suggestion ? (
-          <button type="button" onClick={() => setTile(suggestion)} className="rounded focus-visible:outline-2">
-            <Badge tone="brand" className="font-mono text-sm">
-              {suggestion}
-            </Badge>
-          </button>
-        ) : (
-          <span className="text-warning">{t("inward.noSuggestion")}</span>
-        )}
-      </div>
-      {canAct && (
+      {canAct ? (
         <form
-          className="mt-3 flex gap-2"
+          className="mt-3 grid gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             run(
               putawayAction,
-              { lineId: line.id, tileCode: tile },
+              {
+                lineId: line.id,
+                parts: valid.map((p) => ({ tileCode: p.tileCode, quantity: Number(p.quantity) })),
+              },
               {
                 success: (d) =>
                   t("inward.putawayDone", {
@@ -64,21 +61,20 @@ export function PutawayCard({
             );
           }}
         >
-          <label htmlFor={`tile-${line.id}`} className="sr-only">
-            {t("pick.scanTile")}
-          </label>
-          <TileInput
-            id={`tile-${line.id}`}
-            value={tile}
-            onChange={(e) => setTile(e.target.value)}
-            required
-            className="h-12 text-lg"
-            placeholder={suggestion ?? t("pick.scanTile")}
-          />
-          <Button type="submit" size="lg" loading={pending}>
+          <PutOnTiles i={line.id} parts={parts} good={line.qty} onChange={setParts} />
+          <Button type="submit" size="lg" loading={pending} disabled={!valid.length} className="justify-self-start">
             {t("confirm")}
           </Button>
         </form>
+      ) : (
+        <p className="mt-3 text-sm text-muted">
+          {t("inward.suggested")}:{" "}
+          {suggestion.length ? (
+            <span className="font-mono">{suggestion.map((s) => `${s.tileCode} × ${s.quantity}`).join(", ")}</span>
+          ) : (
+            <span className="text-warning">{t("inward.noSuggestion")}</span>
+          )}
+        </p>
       )}
       <div className="mt-2">
         <FormError error={error} />
